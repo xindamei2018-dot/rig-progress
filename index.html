@@ -173,6 +173,26 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   table{ min-width:700px; }
   .container{ padding:16px; }
 }
+
+/* attendance */
+.attend-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px; }
+.attend-card{ background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:18px; text-align:center; }
+.attend-card.done{ border-color:var(--ok); }
+.attend-card-label{ font-size:13px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; }
+.attend-card-status{ font-size:15px; font-family:'JetBrains Mono',monospace; color:var(--amber); margin-top:8px; font-weight:700; }
+.attend-card.done .attend-card-status{ color:var(--ok); }
+.attend-row{
+  display:flex; align-items:center; gap:14px; padding:12px 14px; background:var(--panel-2);
+  border:1px solid var(--line); border-radius:var(--radius); margin-bottom:8px; flex-wrap:wrap;
+}
+.attend-row.missing{ border-color:var(--danger); background:rgba(217,72,58,0.06); }
+.attend-name{ font-weight:700; font-size:14px; min-width:100px; }
+.attend-thumb{ width:44px; height:44px; border-radius:4px; object-fit:cover; border:1px solid var(--line); cursor:pointer; }
+.attend-map-link{ font-size:12px; color:var(--amber); text-decoration:underline; cursor:pointer; }
+.attend-badge{ font-size:11px; padding:2px 8px; border-radius:10px; font-family:'Inter',sans-serif; }
+.attend-badge.in{ background:rgba(79,154,90,0.15); color:#7bc487; }
+.attend-badge.out{ background:rgba(107,122,138,0.2); color:var(--steel); }
+.attend-badge.missing{ background:rgba(217,72,58,0.15); color:#e78077; }
 </style>
 </head>
 <body>
@@ -245,8 +265,10 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
 
   <div class="tabs">
     <div class="tab active" data-view="entry">今日填报</div>
+    <div class="tab" data-view="attendance">考勤打卡</div>
     <div class="tab" data-view="ledger">施工台账</div>
     <div class="tab" data-view="stats">统计看板</div>
+    <div class="tab" data-view="attendance-overview">考勤总览</div>
   </div>
 
   <div class="container">
@@ -308,6 +330,27 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       </div>
     </div>
 
+    <!-- ---- ATTENDANCE (CHECK-IN) VIEW ---- -->
+    <div class="view" id="view-attendance">
+      <div class="panel">
+        <div class="panel-title">今日考勤打卡</div>
+        <div class="attend-grid">
+          <div class="attend-card" id="attend-card-in">
+            <div class="attend-card-label">上班打卡</div>
+            <div class="attend-card-status" id="attend-status-in">尚未打卡</div>
+            <button class="btn btn-sm" id="attend-btn-in" style="width:100%; max-width:none; margin-top:12px;">上班打卡</button>
+          </div>
+          <div class="attend-card" id="attend-card-out">
+            <div class="attend-card-label">下班打卡</div>
+            <div class="attend-card-status" id="attend-status-out">尚未打卡</div>
+            <button class="btn btn-sm" id="attend-btn-out" style="width:100%; max-width:none; margin-top:12px;">下班打卡</button>
+          </div>
+        </div>
+        <div class="login-note" style="margin-top:16px;">打卡需要授权定位和拍照权限。点击按钮后，浏览器会先请求定位，再自动打开相机，请如实拍摄本人现场照片。</div>
+      </div>
+      <input type="file" id="attend-file-input" accept="image/*" capture="environment" style="display:none;">
+    </div>
+
     <!-- ---- LEDGER VIEW ---- -->
     <div class="view" id="view-ledger">
       <div class="panel" id="backup-reminder" style="display:none; border-color:var(--amber); background:rgba(232,148,12,0.08);">
@@ -356,6 +399,17 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       <div class="panel">
         <div class="panel-title" id="stats-by-rig-title">各钻机停机时长统计（近 30 天）</div>
         <div id="stats-by-rig"></div>
+      </div>
+    </div>
+
+    <!-- ---- ATTENDANCE OVERVIEW (SUPERVISOR) VIEW ---- -->
+    <div class="view" id="view-attendance-overview">
+      <div class="panel">
+        <div class="filters">
+          <div class="field"><label>日期</label><input type="date" id="att-date"></div>
+        </div>
+        <div class="panel-title" style="margin-top:4px;">当日考勤情况</div>
+        <div id="att-overview-list"></div>
       </div>
     </div>
 
@@ -408,7 +462,9 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   let currentOperator = null;
   let isSupervisorMode = false;
   let allEntries = [];
+  let allAttendance = [];
   let pollTimer = null;
+  let pendingCheckType = null; // 'in' | 'out', set right before opening camera
 
   const $ = (id) => document.getElementById(id);
   const todayISO = () => new Date().toISOString().slice(0,10);
@@ -485,6 +541,39 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     if(error) throw error;
   }
 
+  // ---------------- ATTENDANCE HELPERS ----------------
+  async function loadAttendance(){
+    const cutoff = new Date(Date.now() - 45*86400000).toISOString().slice(0,10);
+    const { data, error } = await sb.from('attendance').select('*').gte('date', cutoff).order('ts', {ascending:false});
+    if(error) throw error;
+    allAttendance = data || [];
+  }
+  function getGeolocation(){
+    return new Promise((resolve, reject) => {
+      if(!navigator.geolocation){ reject(new Error('该设备/浏览器不支持定位')); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve(pos.coords),
+        (err) => reject(err),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    });
+  }
+  function sanitizeForPath(str){
+    return String(str).replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
+  }
+  async function uploadAttendancePhoto(file, date, operator, checkType){
+    const ext = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : 'jpg';
+    const path = `${date}/${sanitizeForPath(operator)}-${checkType}-${Date.now()}.${ext}`;
+    const { error } = await sb.storage.from('attendance-photos').upload(path, file, { upsert: false });
+    if(error) throw error;
+    const { data } = sb.storage.from('attendance-photos').getPublicUrl(path);
+    return data.publicUrl;
+  }
+  async function addAttendanceRow(row){
+    const { error } = await sb.from('attendance').insert(row);
+    if(error) throw error;
+  }
+
   // ---------------- LOGIN ----------------
   function showLoginMsg(msg, type){
     const el = $('login-msg');
@@ -541,10 +630,13 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   async function refreshAll(){
     try{
       await loadEntries();
+      await loadAttendance();
       renderTodayEntries();
       renderLedger();
       renderStats();
       checkBackupReminder();
+      if(document.getElementById('view-attendance').classList.contains('active')) renderAttendanceCards();
+      if(document.getElementById('view-attendance-overview').classList.contains('active')) renderAttendanceOverview();
     }catch(e){
       console.error(e);
       setConnDot(false);
@@ -556,7 +648,10 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     $('app').style.display = 'block';
     $('op-name-chip').textContent = currentOperator + (isSupervisorMode ? '（查看模式）' : '');
     $('f-date').value = todayISO();
+    $('att-date').value = todayISO();
     document.querySelector('.tab[data-view="entry"]').style.display = isSupervisorMode ? 'none' : 'block';
+    document.querySelector('.tab[data-view="attendance"]').style.display = isSupervisorMode ? 'none' : 'block';
+    document.querySelector('.tab[data-view="attendance-overview"]').style.display = isSupervisorMode ? 'block' : 'none';
     if(isSupervisorMode) switchView('ledger');
     await refreshAll();
     if(pollTimer) clearInterval(pollTimer);
@@ -573,6 +668,8 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     $('view-'+view).classList.add('active');
     if(view==='ledger'){ renderLedger(); checkBackupReminder(); }
     if(view==='stats') renderStats();
+    if(view==='attendance') renderAttendanceCards();
+    if(view==='attendance-overview') renderAttendanceOverview();
   }
 
   // ---------------- ENTRY SUBMIT ----------------
@@ -801,6 +898,123 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       </div>
     `).join('');
   }
+
+  // ---------------- ATTENDANCE CHECK-IN (OPERATOR) ----------------
+  function todaysAttendanceFor(operator, checkType){
+    const d = todayISO();
+    return allAttendance
+      .filter(a => a.operator === operator && a.date === d && a.check_type === checkType)
+      .sort((a,b)=> b.ts - a.ts)[0] || null;
+  }
+
+  function renderAttendanceCards(){
+    if(!$('attend-card-in')) return;
+    const inRec = todaysAttendanceFor(currentOperator, 'in');
+    const outRec = todaysAttendanceFor(currentOperator, 'out');
+
+    $('attend-card-in').classList.toggle('done', !!inRec);
+    $('attend-status-in').textContent = inRec ? ('已打卡 · ' + new Date(inRec.ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})) : '尚未打卡';
+    $('attend-btn-in').textContent = inRec ? '重新打卡' : '上班打卡';
+
+    $('attend-card-out').classList.toggle('done', !!outRec);
+    $('attend-status-out').textContent = outRec ? ('已打卡 · ' + new Date(outRec.ts).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})) : '尚未打卡';
+    $('attend-btn-out').textContent = outRec ? '重新打卡' : '下班打卡';
+  }
+
+  async function startCheckIn(checkType){
+    const btn = checkType === 'in' ? $('attend-btn-in') : $('attend-btn-out');
+    const statusEl = checkType === 'in' ? $('attend-status-in') : $('attend-status-out');
+    btn.disabled = true;
+    const originalStatus = statusEl.textContent;
+    statusEl.textContent = '定位中…';
+    try{
+      const coords = await getGeolocation();
+      window.__pendingCoords = coords;
+      pendingCheckType = checkType;
+      statusEl.textContent = '请拍照…';
+      $('attend-file-input').value = '';
+      $('attend-file-input').click();
+    }catch(e){
+      console.error(e);
+      statusEl.textContent = originalStatus;
+      btn.disabled = false;
+      showToast('无法获取定位，请检查定位权限后重试', true);
+    }
+  }
+  $('attend-btn-in').addEventListener('click', ()=> startCheckIn('in'));
+  $('attend-btn-out').addEventListener('click', ()=> startCheckIn('out'));
+
+  $('attend-file-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    const checkType = pendingCheckType;
+    const btn = checkType === 'in' ? $('attend-btn-in') : $('attend-btn-out');
+    const statusEl = checkType === 'in' ? $('attend-status-in') : $('attend-status-out');
+    if(!file){ btn.disabled = false; renderAttendanceCards(); return; }
+    statusEl.textContent = '上传中…';
+    try{
+      const date = todayISO();
+      const coords = window.__pendingCoords || {};
+      const photoUrl = await uploadAttendancePhoto(file, date, currentOperator, checkType);
+      await addAttendanceRow({
+        date, operator: currentOperator, check_type: checkType, ts: Date.now(),
+        latitude: coords.latitude ?? null, longitude: coords.longitude ?? null,
+        accuracy: coords.accuracy ?? null, photo_url: photoUrl
+      });
+      showToast((checkType==='in' ? '上班' : '下班') + '打卡成功');
+      await loadAttendance();
+      renderAttendanceCards();
+    }catch(err){
+      console.error(err);
+      showToast('打卡失败，请检查网络后重试', true);
+      renderAttendanceCards();
+    }
+    btn.disabled = false;
+  });
+
+  // ---------------- ATTENDANCE OVERVIEW (SUPERVISOR) ----------------
+  function renderAttendanceOverview(){
+    if(!$('att-overview-list')) return;
+    const date = $('att-date').value || todayISO();
+    const ops = Array.from(new Set(allEntries.map(e=>e.operator).concat(allAttendance.map(a=>a.operator)))).sort();
+    const dayRecords = allAttendance.filter(a => a.date === date);
+
+    if(ops.length===0){
+      $('att-overview-list').innerHTML = '<div class="empty-state"><div class="big">暂无操作手记录</div><div>还没有人登录填报或打卡过</div></div>';
+      return;
+    }
+
+    $('att-overview-list').innerHTML = ops.map(op => {
+      const inRec = dayRecords.filter(a=>a.operator===op && a.check_type==='in').sort((a,b)=>b.ts-a.ts)[0];
+      const outRec = dayRecords.filter(a=>a.operator===op && a.check_type==='out').sort((a,b)=>b.ts-a.ts)[0];
+      const missing = !inRec && !outRec;
+      const thumb = (rec) => rec && rec.photo_url ? `<img class="attend-thumb" src="${escapeHtml(rec.photo_url)}" data-view-photo="${escapeHtml(rec.photo_url)}">` : '';
+      const mapLink = (rec) => (rec && rec.latitude!=null && rec.longitude!=null)
+        ? `<span class="attend-map-link" data-lat="${rec.latitude}" data-lng="${rec.longitude}">查看定位</span>` : '';
+      return `
+        <div class="attend-row ${missing?'missing':''}">
+          <div class="attend-name">${escapeHtml(op)}</div>
+          ${inRec
+            ? `<span class="attend-badge in">上班 ${new Date(inRec.ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</span> ${thumb(inRec)} ${mapLink(inRec)}`
+            : `<span class="attend-badge missing">未上班打卡</span>`}
+          ${outRec
+            ? `<span class="attend-badge out">下班 ${new Date(outRec.ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</span> ${thumb(outRec)} ${mapLink(outRec)}`
+            : `<span class="attend-badge missing">未下班打卡</span>`}
+        </div>
+      `;
+    }).join('');
+
+    $('att-overview-list').querySelectorAll('[data-view-photo]').forEach(img=>{
+      img.addEventListener('click', ()=> window.open(img.dataset.viewPhoto, '_blank'));
+    });
+    $('att-overview-list').querySelectorAll('[data-lat]').forEach(link=>{
+      link.addEventListener('click', ()=>{
+        const lat = link.dataset.lat, lng = link.dataset.lng;
+        window.open(`https://maps.google.com/?q=${lat},${lng}`, '_blank');
+      });
+    });
+  }
+  const attDateEl = document.getElementById('att-date');
+  if(attDateEl) attDateEl.addEventListener('change', renderAttendanceOverview);
 
 })();
 </script>
