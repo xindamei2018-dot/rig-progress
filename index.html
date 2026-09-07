@@ -701,12 +701,16 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
         <td>${e.concrete}</td>
         <td>${e.downtimeReason==='无' ? '—' : `<span class="tag warn">${e.downtimeHrs}h ${escapeHtml(e.downtimeReason)}</span>`}</td>
         <td style="font-family:'Inter',sans-serif; max-width:160px; white-space:normal;">${escapeHtml(e.remarks)||'—'}</td>
-        <td>${(!isSupervisorMode && e.operator===currentOperator) ? `<span class="del-btn" data-ledger-del="${e.id}">✕</span>` : ''}</td>
+        <td>${(!isSupervisorMode && e.operator===currentOperator) || isSupervisorMode ? `<span class="del-btn" data-ledger-del="${e.id}" data-ledger-del-owner="${escapeHtml(e.operator)}">✕</span>` : ''}</td>
       </tr>
     `).join('');
     $('ledger-body').querySelectorAll('[data-ledger-del]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
-        if(!confirm('确认删除该条记录？')) return;
+        const owner = btn.dataset.ledgerDelOwner;
+        const msg = (isSupervisorMode && owner !== currentOperator)
+          ? `确认要删除操作手「${owner}」提交的这条记录吗？此操作不可恢复。`
+          : '确认删除该条记录？';
+        if(!confirm(msg)) return;
         try{ await removeEntryRow(btn.dataset.ledgerDel); await refreshAll(); showToast('已删除'); }
         catch(e){ showToast('删除失败，请重试', true); }
       });
