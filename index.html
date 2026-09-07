@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>旋挖钻机 · 每日施工填报系统</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  --bg: #14120f;
+  --panel: #1c1914;
+  --panel-2: #24201a;
+  --line: #3a3327;
+  --amber: #e8940c;
+  --amber-dim: #a5680a;
+  --steel: #6b7a8a;
+  --text: #ece6d8;
+  --text-dim: #a39a87;
+  --danger: #d9483a;
+  --ok: #4f9a5a;
+  --radius: 3px;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  background-image:
+    linear-gradient(180deg, rgba(232,148,12,0.04) 0%, transparent 300px),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.008) 0px, rgba(255,255,255,0.008) 1px, transparent 1px, transparent 6px);
+}
+.mono{ font-family:'JetBrains Mono', monospace; }
+.display{ font-family:'Oswald', sans-serif; letter-spacing:0.02em; }
+
+#conn-banner{
+  display:none; position:fixed; top:0; left:0; right:0; z-index:200;
+  background:var(--danger); color:#fff; text-align:center; padding:8px; font-size:13px;
+}
+#conn-banner.show{ display:block; }
+
+#login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+#gate-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.login-card{
+  width:100%; max-width:420px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 36px 32px; position: relative; overflow: hidden;
+}
+.login-card::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:4px;
+  background: repeating-linear-gradient(90deg, var(--amber) 0 18px, transparent 18px 26px);
+}
+.rig-mark{ display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+.rig-mark .bit{ width:34px; height:34px; flex-shrink:0; }
+.login-title{ font-size:22px; font-weight:600; color:var(--text); }
+.login-sub{ font-size:12px; color:var(--text-dim); margin-top:4px; margin-bottom:28px; letter-spacing:0.04em; }
+.field{ margin-bottom:16px; }
+.field label{ display:block; font-size:11px; color:var(--amber); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; font-weight:600;}
+.field input, .field select{
+  width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+  padding:11px 12px; border-radius:var(--radius); font-size:15px; font-family:'JetBrains Mono',monospace;
+}
+.field input:focus, .field select:focus{ outline:none; border-color:var(--amber); }
+.btn{
+  width:100%; padding:12px; border:none; border-radius:var(--radius);
+  background: var(--amber); color:#1a1509; font-weight:700; font-size:14px;
+  cursor:pointer; letter-spacing:0.03em; text-transform:uppercase; font-family:'Oswald',sans-serif;
+  transition: background .15s;
+}
+.btn:hover{ background:#f5a51e; }
+.btn:disabled{ background:var(--amber-dim); cursor:not-allowed; }
+.btn-ghost{
+  background:transparent; border:1px solid var(--line); color:var(--text-dim);
+  width:100%; padding:10px; border-radius:var(--radius); margin-top:10px; cursor:pointer; font-size:13px;
+}
+.login-note{ font-size:12px; color:var(--text-dim); margin-top:18px; line-height:1.6; }
+.login-msg{ font-size:13px; margin-bottom:14px; padding:10px 12px; border-radius:var(--radius); display:none; }
+.login-msg.show{ display:block; }
+.login-msg.err{ background:rgba(217,72,58,0.12); color:#e78077; border:1px solid rgba(217,72,58,0.3); }
+.login-msg.info{ background:rgba(232,148,12,0.1); color:var(--amber); border:1px solid rgba(232,148,12,0.25); }
+
+#app{ display:none; }
+.topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 14px 24px; background:var(--panel); border-bottom:1px solid var(--line);
+  position:sticky; top:0; z-index:10; flex-wrap:wrap; gap:10px;
+}
+.topbar-left{ display:flex; align-items:center; gap:14px; }
+.topbar-title{ font-size:17px; font-weight:600; }
+.topbar-title span{ color:var(--amber); }
+.op-chip{
+  background:var(--panel-2); border:1px solid var(--line); padding:6px 12px; border-radius:20px;
+  font-size:12px; display:flex; align-items:center; gap:8px;
+}
+.op-dot{ width:7px; height:7px; border-radius:50%; background:var(--ok); }
+.op-dot.offline{ background:var(--danger); }
+.topbar-right{ display:flex; align-items:center; gap:10px; }
+.logout-link{ font-size:12px; color:var(--text-dim); cursor:pointer; border:1px solid var(--line); padding:6px 12px; border-radius:var(--radius);}
+.logout-link:hover{ color:var(--danger); border-color:var(--danger); }
+
+.tabs{ display:flex; gap:2px; padding:0 24px; background:var(--panel); border-bottom:1px solid var(--line); overflow-x:auto; }
+.tab{
+  padding:12px 18px; font-size:13px; color:var(--text-dim); cursor:pointer; border-bottom:2px solid transparent;
+  font-family:'Oswald',sans-serif; letter-spacing:0.03em; white-space:nowrap;
+}
+.tab.active{ color:var(--amber); border-bottom-color:var(--amber); }
+
+.container{ max-width:1180px; margin:0 auto; padding:24px; }
+.view{ display:none; }
+.view.active{ display:block; }
+
+.panel{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px; margin-bottom:20px; }
+.panel-title{ font-size:14px; font-weight:600; color:var(--text); margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+.panel-title::before{ content:""; width:3px; height:14px; background:var(--amber); display:inline-block; }
+
+.grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:14px; }
+.grid .field{ margin-bottom:0; }
+
+.row-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+.btn-sm{ padding:10px 20px; width:auto; }
+
+.stats-row{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:14px; margin-bottom:20px; }
+.stat-card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; }
+.stat-label{ font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px; }
+.stat-value{ font-size:26px; font-weight:700; font-family:'JetBrains Mono',monospace; color:var(--amber); }
+.stat-unit{ font-size:12px; color:var(--text-dim); margin-left:4px; }
+
+.gauge-wrap{ display:flex; align-items:center; gap:10px; min-width:140px; }
+.gauge{ width:70px; height:14px; background:var(--bg); border:1px solid var(--line); border-radius:2px; position:relative; overflow:hidden; }
+.gauge-fill{ height:100%; background:linear-gradient(90deg, var(--amber-dim), var(--amber)); }
+.gauge-fill.over{ background:linear-gradient(90deg, #7a8a3a, var(--ok)); }
+.gauge-txt{ font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim); white-space:nowrap; }
+
+.table-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); }
+table{ width:100%; border-collapse:collapse; font-size:13px; min-width:900px; }
+th{
+  text-align:left; padding:10px 12px; background:var(--panel-2); color:var(--text-dim);
+  text-transform:uppercase; font-size:10.5px; letter-spacing:0.06em; border-bottom:1px solid var(--line);
+  position:sticky; top:0;
+}
+td{ padding:10px 12px; border-bottom:1px solid var(--line); font-family:'JetBrains Mono',monospace; color:var(--text); }
+tr:last-child td{ border-bottom:none; }
+tr:hover td{ background:rgba(232,148,12,0.04); }
+.tag{ padding:2px 8px; border-radius:10px; font-size:11px; font-family:'Inter',sans-serif; }
+.tag.ok{ background:rgba(79,154,90,0.15); color:#7bc487; }
+.tag.warn{ background:rgba(217,72,58,0.15); color:#e78077; }
+.del-btn{ color:var(--text-dim); cursor:pointer; font-size:16px; }
+.del-btn:hover{ color:var(--danger); }
+
+.filters{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.filters .field{ margin-bottom:0; min-width:140px; }
+
+.empty-state{ text-align:center; padding:50px 20px; color:var(--text-dim); }
+.empty-state .big{ font-size:15px; color:var(--text); margin-bottom:6px; }
+
+.today-list{ margin-top:22px; }
+.entry-row{
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  padding:12px 14px; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:8px;
+}
+.entry-left{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.entry-pile{ font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--amber); font-size:14px; }
+.entry-meta{ font-size:12px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+
+.toast{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:var(--panel-2); border:1px solid var(--amber); color:var(--text);
+  padding:12px 20px; border-radius:var(--radius); font-size:13px; z-index:100; display:none;
+}
+.toast.show{ display:block; }
+
+@media (max-width:640px){
+  table{ min-width:700px; }
+  .container{ padding:16px; }
+}
+</style>
+</head>
+<body>
+
+<div id="conn-banner">⚠ 无法连接云端数据库，请检查网络连接</div>
+
+<!-- ============ ACCESS GATE ============ -->
+<div id="gate-screen">
+  <div class="login-card">
+    <div class="rig-mark">
+      <svg class="bit" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="17" y="2" width="6" height="14" fill="#e8940c"/>
+        <path d="M20 16 L30 26 L26 34 L20 30 L14 34 L10 26 Z" fill="#e8940c" opacity="0.85"/>
+        <circle cx="20" cy="16" r="3" fill="#1c1914" stroke="#e8940c" stroke-width="1.5"/>
+      </svg>
+      <div><div class="login-title">旋挖钻机施工填报</div></div>
+    </div>
+    <div class="login-sub">项目内部工具 · 需输入通行码</div>
+    <div id="gate-msg" class="login-msg"></div>
+    <div class="field">
+      <label>项目通行码</label>
+      <input id="gate-code" type="password" placeholder="请向管理员索取" autocomplete="off">
+    </div>
+    <button class="btn" id="gate-btn">进入系统</button>
+    <div class="login-note">本工具仅供本项目操作手与管理人员使用，请勿将通行码转发给项目组以外的人员。</div>
+  </div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <div class="rig-mark">
+      <svg class="bit" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="17" y="2" width="6" height="14" fill="#e8940c"/>
+        <path d="M20 16 L30 26 L26 34 L20 30 L14 34 L10 26 Z" fill="#e8940c" opacity="0.85"/>
+        <circle cx="20" cy="16" r="3" fill="#1c1914" stroke="#e8940c" stroke-width="1.5"/>
+      </svg>
+      <div><div class="login-title">旋挖钻机施工填报</div></div>
+    </div>
+    <div class="login-sub">RIG PROGRESS · 云端同步 · 操作手每日数据上传</div>
+
+    <div id="login-msg" class="login-msg"></div>
+
+    <div class="field">
+      <label>操作手姓名</label>
+      <input id="login-name" type="text" placeholder="例如：王建国" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>登录密码（4位数字）</label>
+      <input id="login-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••">
+    </div>
+    <button class="btn" id="login-btn">登录 / 首次注册</button>
+    <button class="btn-ghost" id="supervisor-btn">以查看模式进入（不填报，仅查看台账）</button>
+
+    <div class="login-note">首次输入姓名与密码即自动注册；之后使用同样姓名+密码登录。数据保存在 Supabase 云端，独立于任何第三方平台运行。</div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-title">旋挖钻机 <span>· 每日施工台账</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="op-chip"><span class="op-dot" id="conn-dot"></span><span id="op-name-chip">—</span></div>
+      <div class="logout-link" id="logout-btn">退出登录</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-view="entry">今日填报</div>
+    <div class="tab" data-view="ledger">施工台账</div>
+    <div class="tab" data-view="stats">统计看板</div>
+  </div>
+
+  <div class="container">
+
+    <!-- ---- ENTRY VIEW ---- -->
+    <div class="view active" id="view-entry">
+      <div class="panel" id="entry-panel">
+        <div class="panel-title">新增桩位记录</div>
+        <div class="grid">
+          <div class="field"><label>日期</label><input type="date" id="f-date"></div>
+          <div class="field"><label>钻机编号</label><input type="text" id="f-rig" placeholder="如 XZ-03" class="mono"></div>
+          <div class="field"><label>桩号</label><input type="text" id="f-pile" placeholder="如 P-A12-035" class="mono"></div>
+          <div class="field"><label>桩径 (mm)</label>
+            <select id="f-diameter">
+              <option value="800">800</option>
+              <option value="1000">1000</option>
+              <option value="1200" selected>1200</option>
+              <option value="1500">1500</option>
+              <option value="1800">1800</option>
+              <option value="other">其他（在备注注明）</option>
+            </select>
+          </div>
+          <div class="field"><label>设计孔深 (m)</label><input type="number" step="0.1" id="f-design-depth" class="mono"></div>
+          <div class="field"><label>实际孔深 (m)</label><input type="number" step="0.1" id="f-actual-depth" class="mono"></div>
+          <div class="field"><label>开钻时间</label><input type="time" id="f-start-time"></div>
+          <div class="field"><label>完钻时间</label><input type="time" id="f-end-time"></div>
+          <div class="field"><label>清孔情况</label>
+            <select id="f-cleaning"><option value="合格">合格</option><option value="待复查">待复查</option><option value="未清孔">未清孔</option></select>
+          </div>
+          <div class="field"><label>钢筋笼下笼</label>
+            <select id="f-cage"><option value="已下笼">已下笼</option><option value="未下笼">未下笼</option><option value="不涉及">不涉及</option></select>
+          </div>
+          <div class="field"><label>混凝土灌注量 (m³)</label><input type="number" step="0.1" id="f-concrete" class="mono"></div>
+          <div class="field"><label>停机时长 (h)</label><input type="number" step="0.1" id="f-downtime-hrs" class="mono" value="0"></div>
+          <div class="field"><label>停机原因</label>
+            <select id="f-downtime-reason">
+              <option value="无">无</option>
+              <option value="设备故障">设备故障</option>
+              <option value="等图纸/桩位">等图纸/桩位</option>
+              <option value="等材料">等材料</option>
+              <option value="恶劣天气">恶劣天气</option>
+              <option value="地下障碍物">地下障碍物</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>备注</label>
+          <input type="text" id="f-remarks" placeholder="孔壁坍塌、地下障碍、协调事项等">
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm" id="submit-entry-btn" style="max-width:220px;">提交本条记录</button>
+        </div>
+      </div>
+
+      <div class="today-list">
+        <div class="panel-title" style="margin-bottom:12px;">我今日已提交记录</div>
+        <div id="today-entries"></div>
+      </div>
+    </div>
+
+    <!-- ---- LEDGER VIEW ---- -->
+    <div class="view" id="view-ledger">
+      <div class="panel" id="backup-reminder" style="display:none; border-color:var(--amber); background:rgba(232,148,12,0.08);">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--amber); margin-bottom:4px;">⚠ 备份提醒</div>
+            <div style="font-size:12px; color:var(--text-dim);" id="backup-reminder-text"></div>
+          </div>
+          <button class="btn-ghost" style="width:auto; margin-top:0; white-space:nowrap;" id="backup-now-btn">立即导出备份</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="filters">
+          <div class="field"><label>起始日期</label><input type="date" id="flt-start"></div>
+          <div class="field"><label>结束日期</label><input type="date" id="flt-end"></div>
+          <div class="field" id="flt-operator-wrap"><label>操作手</label><select id="flt-operator"><option value="">全部</option></select></div>
+          <div class="field"><label>钻机编号</label><input type="text" id="flt-rig" placeholder="全部" class="mono"></div>
+        </div>
+        <div class="row-actions" style="margin-top:0; margin-bottom:14px; justify-content:space-between;">
+          <div id="ledger-count" class="mono" style="font-size:12px; color:var(--text-dim); align-self:center;"></div>
+          <button class="btn-ghost" style="width:auto; margin-top:0;" id="export-csv-btn">导出 CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>日期</th><th>操作手</th><th>钻机</th><th>桩号</th><th>桩径</th><th>孔深进度</th>
+              <th>用时</th><th>清孔</th><th>钢筋笼</th><th>混凝土(m³)</th><th>停机</th><th>备注</th><th></th>
+            </tr></thead>
+            <tbody id="ledger-body"></tbody>
+          </table>
+        </div>
+        <div id="ledger-empty" class="empty-state" style="display:none;">
+          <div class="big">暂无符合条件的记录</div>
+          <div>调整筛选条件，或前往「今日填报」新增数据</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- STATS VIEW ---- -->
+    <div class="view" id="view-stats">
+      <div class="stats-row" id="stats-cards"></div>
+      <div class="panel">
+        <div class="panel-title" id="stats-by-operator-title">各操作手完成桩数（近 30 天）</div>
+        <div id="stats-by-operator"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title" id="stats-by-rig-title">各钻机停机时长统计（近 30 天）</div>
+        <div id="stats-by-rig"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(function(){
+  // ============ PROJECT ACCESS GATE ============
+  // 改这里的通行码即可（区分大小写）。改完保存文件重新分发给操作手即可生效。
+  const PROJECT_ACCESS_CODE = "T5RIG2026";
+  const GATE_STORAGE_KEY = "rig_gate_ok_v1";
+
+  function showGateMsg(msg){
+    const el = document.getElementById('gate-msg');
+    el.textContent = msg;
+    el.className = 'login-msg show err';
+  }
+  function passGate(){
+    document.getElementById('gate-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+  try{
+    if(localStorage.getItem(GATE_STORAGE_KEY) === '1'){
+      passGate();
+    }
+  }catch(e){ /* localStorage unavailable, just show gate every time */ }
+
+  document.getElementById('gate-btn').addEventListener('click', () => {
+    const code = document.getElementById('gate-code').value;
+    if(code === PROJECT_ACCESS_CODE){
+      try{ localStorage.setItem(GATE_STORAGE_KEY, '1'); }catch(e){}
+      passGate();
+    } else {
+      showGateMsg('通行码不正确，请向管理员核实');
+    }
+  });
+  document.getElementById('gate-code').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') document.getElementById('gate-btn').click();
+  });
+
+  // ============ SUPABASE CONFIG ============
+  const SUPABASE_URL = "https://mjngzxuvejejxdsqqopk.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qbmd6eHV2ZWplanhkc3Fxb3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0Mzc3MjQsImV4cCI6MjEwNDAxMzcyNH0.MWiRCdjbO5uobRGxVOxZD-6QW56_sHZhNoyyrx4TYxg";
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let currentOperator = null;
+  let isSupervisorMode = false;
+  let allEntries = [];
+  let pollTimer = null;
+
+  const $ = (id) => document.getElementById(id);
+  const todayISO = () => new Date().toISOString().slice(0,10);
+
+  function showToast(msg, isErr){
+    const t = $('toast');
+    t.textContent = msg;
+    t.style.borderColor = isErr ? 'var(--danger)' : 'var(--amber)';
+    t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 2600);
+  }
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str == null ? '' : String(str);
+    return d.innerHTML;
+  }
+  function setConnDot(ok){
+    const dot = $('conn-dot');
+    if(dot) dot.classList.toggle('offline', !ok);
+    $('conn-banner').classList.toggle('show', !ok);
+  }
+
+  // ---------------- DB MAPPING ----------------
+  function fromRow(r){
+    return {
+      id: r.id, date: r.date, operator: r.operator, rig: r.rig, pile: r.pile,
+      diameter: r.diameter, designDepth: r.design_depth, actualDepth: r.actual_depth,
+      startTime: r.start_time, endTime: r.end_time, cleaning: r.cleaning, cage: r.cage,
+      concrete: r.concrete, downtimeHrs: r.downtime_hrs, downtimeReason: r.downtime_reason,
+      remarks: r.remarks, submittedAt: r.submitted_at
+    };
+  }
+  function toRow(e){
+    return {
+      date: e.date, operator: e.operator, rig: e.rig, pile: e.pile, diameter: e.diameter,
+      design_depth: e.designDepth, actual_depth: e.actualDepth, start_time: e.startTime,
+      end_time: e.endTime, cleaning: e.cleaning, cage: e.cage, concrete: e.concrete,
+      downtime_hrs: e.downtimeHrs, downtime_reason: e.downtimeReason, remarks: e.remarks,
+      submitted_at: e.submittedAt
+    };
+  }
+
+  // ---------------- DB HELPERS ----------------
+  async function loadEntries(){
+    const { data, error } = await sb.from('entries').select('*').order('date', {ascending:false});
+    if(error) throw error;
+    allEntries = (data||[]).map(fromRow);
+    setConnDot(true);
+  }
+  async function addEntryRow(entry){
+    const { error } = await sb.from('entries').insert(toRow(entry));
+    if(error) throw error;
+  }
+  async function removeEntryRow(id){
+    const { error } = await sb.from('entries').delete().eq('id', id);
+    if(error) throw error;
+  }
+  async function findRosterUser(name){
+    const { data, error } = await sb.from('roster').select('*').eq('name', name).maybeSingle();
+    if(error) throw error;
+    return data;
+  }
+  async function registerRosterUser(name, pin){
+    const { error } = await sb.from('roster').insert({ name, pin });
+    if(error) throw error;
+  }
+  async function getLastBackup(){
+    const { data, error } = await sb.from('backup_meta').select('*').eq('id', 1).maybeSingle();
+    if(error) throw error;
+    return data;
+  }
+  async function setLastBackup(ts, by){
+    const { error } = await sb.from('backup_meta').upsert({ id: 1, ts, by });
+    if(error) throw error;
+  }
+
+  // ---------------- LOGIN ----------------
+  function showLoginMsg(msg, type){
+    const el = $('login-msg');
+    el.textContent = msg;
+    el.className = 'login-msg show ' + (type||'info');
+  }
+
+  $('login-btn').addEventListener('click', async () => {
+    const name = $('login-name').value.trim();
+    const pin = $('login-pin').value.trim();
+    if(!name){ showLoginMsg('请输入姓名', 'err'); return; }
+    if(!/^\d{4,6}$/.test(pin)){ showLoginMsg('密码需为 4-6 位数字', 'err'); return; }
+
+    $('login-btn').disabled = true;
+    $('login-btn').textContent = '连接云端中…';
+    try{
+      const existing = await findRosterUser(name);
+      if(existing){
+        if(existing.pin !== pin){
+          showLoginMsg('密码不正确，请重试', 'err');
+          $('login-btn').disabled = false; $('login-btn').textContent = '登录 / 首次注册';
+          return;
+        }
+      } else {
+        await registerRosterUser(name, pin);
+        showToast('已为「'+name+'」创建账号');
+      }
+      currentOperator = name;
+      isSupervisorMode = false;
+      await enterApp();
+    }catch(e){
+      console.error(e);
+      showLoginMsg('云端连接失败，请检查网络后重试', 'err');
+      $('login-btn').disabled = false; $('login-btn').textContent = '登录 / 首次注册';
+    }
+  });
+
+  $('supervisor-btn').addEventListener('click', async () => {
+    currentOperator = '查看模式';
+    isSupervisorMode = true;
+    await enterApp();
+  });
+
+  $('logout-btn').addEventListener('click', () => {
+    currentOperator = null;
+    isSupervisorMode = false;
+    if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+    $('app').style.display = 'none';
+    $('login-screen').style.display = 'flex';
+    $('login-pin').value = '';
+    $('login-msg').className = 'login-msg';
+  });
+
+  async function refreshAll(){
+    try{
+      await loadEntries();
+      renderTodayEntries();
+      renderLedger();
+      renderStats();
+      checkBackupReminder();
+    }catch(e){
+      console.error(e);
+      setConnDot(false);
+    }
+  }
+
+  async function enterApp(){
+    $('login-screen').style.display = 'none';
+    $('app').style.display = 'block';
+    $('op-name-chip').textContent = currentOperator + (isSupervisorMode ? '（查看模式）' : '');
+    $('f-date').value = todayISO();
+    document.querySelector('.tab[data-view="entry"]').style.display = isSupervisorMode ? 'none' : 'block';
+    if(isSupervisorMode) switchView('ledger');
+    await refreshAll();
+    if(pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(refreshAll, 20000); // light polling for near-real-time sync
+  }
+
+  // ---------------- TABS ----------------
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=> switchView(tab.dataset.view));
+  });
+  function switchView(view){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.view===view));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    $('view-'+view).classList.add('active');
+    if(view==='ledger'){ renderLedger(); checkBackupReminder(); }
+    if(view==='stats') renderStats();
+  }
+
+  // ---------------- ENTRY SUBMIT ----------------
+  $('submit-entry-btn').addEventListener('click', async () => {
+    const pile = $('f-pile').value.trim();
+    const date = $('f-date').value;
+    const rig = $('f-rig').value.trim();
+    if(!date){ showToast('请选择日期', true); return; }
+    if(!rig){ showToast('请填写钻机编号', true); return; }
+    if(!pile){ showToast('请填写桩号', true); return; }
+
+    const entry = {
+      date, operator: currentOperator, rig,
+      pile, diameter: $('f-diameter').value,
+      designDepth: parseFloat($('f-design-depth').value) || 0,
+      actualDepth: parseFloat($('f-actual-depth').value) || 0,
+      startTime: $('f-start-time').value, endTime: $('f-end-time').value,
+      cleaning: $('f-cleaning').value, cage: $('f-cage').value,
+      concrete: parseFloat($('f-concrete').value) || 0,
+      downtimeHrs: parseFloat($('f-downtime-hrs').value) || 0,
+      downtimeReason: $('f-downtime-reason').value,
+      remarks: $('f-remarks').value.trim(),
+      submittedAt: Date.now()
+    };
+
+    const btn = $('submit-entry-btn');
+    btn.disabled = true; btn.textContent = '提交中…';
+    try{
+      await addEntryRow(entry);
+      showToast('已提交并同步至云端 · 桩号 ' + pile);
+      ['f-pile','f-design-depth','f-actual-depth','f-start-time','f-end-time','f-concrete','f-remarks'].forEach(id=>$(id).value='');
+      $('f-downtime-hrs').value = '0';
+      await refreshAll();
+    }catch(e){
+      console.error(e);
+      showToast('提交失败，请检查网络后重试', true);
+    }
+    btn.disabled = false; btn.textContent = '提交本条记录';
+  });
+
+  function renderTodayEntries(){
+    const wrap = $('today-entries');
+    const mine = allEntries.filter(e => e.operator===currentOperator && e.date===$('f-date').value)
+                            .sort((a,b)=>(b.submittedAt||0) - (a.submittedAt||0));
+    if(mine.length===0){
+      wrap.innerHTML = '<div class="empty-state"><div class="big">今日尚未提交记录</div><div>填写上方表单开始记录本日桩位施工数据</div></div>';
+      return;
+    }
+    wrap.innerHTML = mine.map(e => `
+      <div class="entry-row" data-id="${e.id}">
+        <div class="entry-left">
+          <span class="entry-pile">${escapeHtml(e.pile)}</span>
+          <span class="entry-meta">Φ${escapeHtml(e.diameter)}mm</span>
+          <span class="entry-meta">${e.actualDepth}/${e.designDepth}m</span>
+          <span class="entry-meta">混凝土 ${e.concrete}m³</span>
+          ${e.downtimeReason!=='无' ? `<span class="tag warn">停机 ${e.downtimeHrs}h · ${escapeHtml(e.downtimeReason)}</span>` : ''}
+        </div>
+        <span class="del-btn" data-del="${e.id}">✕</span>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirm('确认删除该条记录？')) return;
+        try{ await removeEntryRow(btn.dataset.del); await refreshAll(); showToast('已删除'); }
+        catch(e){ showToast('删除失败，请重试', true); }
+      });
+    });
+  }
+  $('f-date').addEventListener('change', renderTodayEntries);
+
+  // ---------------- LEDGER ----------------
+  function populateOperatorFilter(){
+    const sel = $('flt-operator');
+    if(!isSupervisorMode){
+      sel.innerHTML = `<option value="${escapeHtml(currentOperator)}">${escapeHtml(currentOperator)}（仅本人）</option>`;
+      sel.value = currentOperator;
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    const ops = Array.from(new Set(allEntries.map(e=>e.operator))).sort();
+    const current = sel.value;
+    sel.innerHTML = '<option value="">全部</option>' + ops.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+    sel.value = current;
+  }
+
+  function gaugeHtml(actual, design){
+    const pct = design>0 ? Math.min(100, (actual/design)*100) : 0;
+    const over = design>0 && actual >= design;
+    return `<div class="gauge-wrap">
+      <div class="gauge"><div class="gauge-fill ${over?'over':''}" style="width:${pct}%"></div></div>
+      <span class="gauge-txt">${actual||0}/${design||0}m</span>
+    </div>`;
+  }
+
+  function getFilteredEntries(){
+    const start = $('flt-start').value, end = $('flt-end').value;
+    const op = isSupervisorMode ? $('flt-operator').value : currentOperator;
+    const rig = $('flt-rig').value.trim().toLowerCase();
+    return allEntries.filter(e=>{
+      if(!isSupervisorMode && e.operator !== currentOperator) return false;
+      if(start && e.date < start) return false;
+      if(end && e.date > end) return false;
+      if(op && e.operator !== op) return false;
+      if(rig && !e.rig.toLowerCase().includes(rig)) return false;
+      return true;
+    }).sort((a,b)=> b.date.localeCompare(a.date) || (b.submittedAt||0) - (a.submittedAt||0));
+  }
+
+  function renderLedger(){
+    populateOperatorFilter();
+    const rows = getFilteredEntries();
+    $('ledger-count').textContent = rows.length + ' 条记录';
+    $('ledger-empty').style.display = rows.length===0 ? 'block' : 'none';
+    $('ledger-body').innerHTML = rows.map(e => `
+      <tr>
+        <td>${e.date}</td>
+        <td>${escapeHtml(e.operator)}</td>
+        <td>${escapeHtml(e.rig)}</td>
+        <td>${escapeHtml(e.pile)}</td>
+        <td>Φ${escapeHtml(e.diameter)}</td>
+        <td>${gaugeHtml(e.actualDepth, e.designDepth)}</td>
+        <td>${e.startTime||'--'}–${e.endTime||'--'}</td>
+        <td><span class="tag ${e.cleaning==='合格'?'ok':'warn'}">${escapeHtml(e.cleaning)}</span></td>
+        <td>${escapeHtml(e.cage)}</td>
+        <td>${e.concrete}</td>
+        <td>${e.downtimeReason==='无' ? '—' : `<span class="tag warn">${e.downtimeHrs}h ${escapeHtml(e.downtimeReason)}</span>`}</td>
+        <td style="font-family:'Inter',sans-serif; max-width:160px; white-space:normal;">${escapeHtml(e.remarks)||'—'}</td>
+        <td>${(!isSupervisorMode && e.operator===currentOperator) ? `<span class="del-btn" data-ledger-del="${e.id}">✕</span>` : ''}</td>
+      </tr>
+    `).join('');
+    $('ledger-body').querySelectorAll('[data-ledger-del]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirm('确认删除该条记录？')) return;
+        try{ await removeEntryRow(btn.dataset.ledgerDel); await refreshAll(); showToast('已删除'); }
+        catch(e){ showToast('删除失败，请重试', true); }
+      });
+    });
+  }
+  ['flt-start','flt-end','flt-operator','flt-rig'].forEach(id=>{
+    $(id).addEventListener('input', renderLedger);
+    $(id).addEventListener('change', renderLedger);
+  });
+
+  async function doExportCsv(rows){
+    if(rows.length===0){ showToast('没有可导出的数据', true); return; }
+    const headers = ['日期','操作手','钻机','桩号','桩径mm','设计孔深m','实际孔深m','开钻','完钻','清孔','钢筋笼','混凝土m3','停机h','停机原因','备注'];
+    const csvRows = rows.map(e => [e.date,e.operator,e.rig,e.pile,e.diameter,e.designDepth,e.actualDepth,e.startTime,e.endTime,e.cleaning,e.cage,e.concrete,e.downtimeHrs,e.downtimeReason,(e.remarks||'').replace(/,/g,'、')].join(','));
+    const csv = '\uFEFF' + [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '旋挖施工台账_' + todayISO() + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    try{ await setLastBackup(Date.now(), currentOperator); }catch(e){ /* non-fatal */ }
+    checkBackupReminder();
+  }
+  $('export-csv-btn').addEventListener('click', ()=> doExportCsv(getFilteredEntries()));
+  $('backup-now-btn').addEventListener('click', ()=> doExportCsv(allEntries));
+
+  const BACKUP_REMINDER_DAYS = 7;
+  async function checkBackupReminder(){
+    if(!isSupervisorMode){ $('backup-reminder').style.display = 'none'; return; }
+    let last = null;
+    try{ last = await getLastBackup(); }catch(e){ last = null; }
+    const banner = $('backup-reminder');
+    if(!last || !last.ts){
+      $('backup-reminder-text').textContent = '云端数据还从未导出过备份，建议现在就导出一份 CSV 存到本地。';
+      banner.style.display = 'block';
+      return;
+    }
+    const daysSince = (Date.now() - last.ts) / 86400000;
+    if(daysSince >= BACKUP_REMINDER_DAYS){
+      $('backup-reminder-text').textContent = `上次备份是 ${Math.floor(daysSince)} 天前（${new Date(last.ts).toLocaleDateString('zh-CN')}），建议尽快重新导出一份。`;
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  // ---------------- STATS ----------------
+  function renderStats(){
+    const cutoff = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+    const scoped = isSupervisorMode ? allEntries : allEntries.filter(e => e.operator === currentOperator);
+    const recent = scoped.filter(e => e.date >= cutoff);
+    $('stats-by-operator-title').textContent = isSupervisorMode ? '各操作手完成桩数（近 30 天）' : '我的完成桩数（近 30 天）';
+    $('stats-by-rig-title').textContent = isSupervisorMode ? '各钻机停机时长统计（近 30 天）' : '我使用钻机的停机时长（近 30 天）';
+    const totalPiles = recent.length;
+    const totalFootage = recent.reduce((s,e)=>s+(e.actualDepth||0),0);
+    const totalConcrete = recent.reduce((s,e)=>s+(e.concrete||0),0);
+    const totalDowntime = recent.reduce((s,e)=>s+(e.downtimeHrs||0),0);
+
+    $('stats-cards').innerHTML = `
+      <div class="stat-card"><div class="stat-label">近30天完成桩数</div><div class="stat-value">${totalPiles}<span class="stat-unit">根</span></div></div>
+      <div class="stat-card"><div class="stat-label">累计成孔进尺</div><div class="stat-value">${totalFootage.toFixed(1)}<span class="stat-unit">m</span></div></div>
+      <div class="stat-card"><div class="stat-label">累计灌注方量</div><div class="stat-value">${totalConcrete.toFixed(1)}<span class="stat-unit">m³</span></div></div>
+      <div class="stat-card"><div class="stat-label">累计停机时长</div><div class="stat-value">${totalDowntime.toFixed(1)}<span class="stat-unit">h</span></div></div>
+    `;
+
+    renderBarList('stats-by-operator', groupCount(recent,'operator'), '根');
+    renderBarList('stats-by-rig', groupSum(recent,'rig','downtimeHrs'), 'h');
+  }
+  function groupCount(rows, key){
+    const m = {}; rows.forEach(r => { m[r[key]] = (m[r[key]]||0) + 1; }); return m;
+  }
+  function groupSum(rows, key, sumKey){
+    const m = {}; rows.forEach(r => { m[r[key]] = (m[r[key]]||0) + (r[sumKey]||0); }); return m;
+  }
+  function renderBarList(containerId, dataObj, unit){
+    const el = $(containerId);
+    const entries = Object.entries(dataObj).sort((a,b)=>b[1]-a[1]);
+    if(entries.length===0){ el.innerHTML = '<div class="empty-state"><div class="big">近30天暂无数据</div></div>'; return; }
+    const max = Math.max(...entries.map(e=>e[1]), 1);
+    el.innerHTML = entries.map(([label,val])=>`
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+        <div style="width:110px; font-size:13px; color:var(--text-dim); flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(label)}</div>
+        <div style="flex:1; background:var(--bg); border:1px solid var(--line); border-radius:2px; height:18px; position:relative;">
+          <div style="height:100%; width:${(val/max*100).toFixed(1)}%; background:var(--amber); border-radius:2px;"></div>
+        </div>
+        <div class="mono" style="width:60px; text-align:right; font-size:13px; color:var(--text);">${val.toFixed ? val.toFixed(1) : val}${unit}</div>
+      </div>
+    `).join('');
+  }
+
+})();
+</script>
+</body>
+</html>
