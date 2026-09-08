@@ -925,21 +925,12 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     const btn = checkType === 'in' ? $('attend-btn-in') : $('attend-btn-out');
     const statusEl = checkType === 'in' ? $('attend-status-in') : $('attend-status-out');
     btn.disabled = true;
-    const originalStatus = statusEl.textContent;
-    statusEl.textContent = '定位中…';
-    try{
-      const coords = await getGeolocation();
-      window.__pendingCoords = coords;
-      pendingCheckType = checkType;
-      statusEl.textContent = '请拍照…';
-      $('attend-file-input').value = '';
-      $('attend-file-input').click();
-    }catch(e){
-      console.error(e);
-      statusEl.textContent = originalStatus;
-      btn.disabled = false;
-      showToast('无法获取定位，请检查定位权限后重试', true);
-    }
+    statusEl.textContent = '请拍照…';
+    pendingCheckType = checkType;
+    // Open the camera immediately (synchronously, within the click gesture) —
+    // any await before this point causes some mobile browsers to silently block it.
+    $('attend-file-input').value = '';
+    $('attend-file-input').click();
   }
   $('attend-btn-in').addEventListener('click', ()=> startCheckIn('in'));
   $('attend-btn-out').addEventListener('click', ()=> startCheckIn('out'));
@@ -950,10 +941,19 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     const btn = checkType === 'in' ? $('attend-btn-in') : $('attend-btn-out');
     const statusEl = checkType === 'in' ? $('attend-status-in') : $('attend-status-out');
     if(!file){ btn.disabled = false; renderAttendanceCards(); return; }
+
+    statusEl.textContent = '定位中…';
+    let coords = {};
+    try{
+      coords = await getGeolocation();
+    }catch(e){
+      console.warn('定位失败，继续打卡但不记录位置', e);
+      showToast('定位获取失败，打卡将不含位置信息', true);
+    }
+
     statusEl.textContent = '上传中…';
     try{
       const date = todayISO();
-      const coords = window.__pendingCoords || {};
       const photoUrl = await uploadAttendancePhoto(file, date, currentOperator, checkType);
       await addAttendanceRow({
         date, operator: currentOperator, check_type: checkType, ts: Date.now(),
