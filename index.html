@@ -951,10 +951,22 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       showToast('定位获取失败，打卡将不含位置信息', true);
     }
 
-    statusEl.textContent = '上传中…';
+    statusEl.textContent = '上传照片中…';
+    let photoUrl;
     try{
       const date = todayISO();
-      const photoUrl = await uploadAttendancePhoto(file, date, currentOperator, checkType);
+      photoUrl = await uploadAttendancePhoto(file, date, currentOperator, checkType);
+    }catch(err){
+      console.error('照片上传失败', err);
+      statusEl.textContent = '❌ 上传照片失败：' + (err.message || err.error_description || JSON.stringify(err)).slice(0,120);
+      showToast('打卡失败（上传照片环节），请截图发给管理员', true);
+      btn.disabled = false;
+      return;
+    }
+
+    statusEl.textContent = '写入记录中…';
+    try{
+      const date = todayISO();
       await addAttendanceRow({
         date, operator: currentOperator, check_type: checkType, ts: Date.now(),
         latitude: coords.latitude ?? null, longitude: coords.longitude ?? null,
@@ -964,9 +976,11 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       await loadAttendance();
       renderAttendanceCards();
     }catch(err){
-      console.error(err);
-      showToast('打卡失败，请检查网络后重试', true);
-      renderAttendanceCards();
+      console.error('写入考勤记录失败', err);
+      statusEl.textContent = '❌ 写入记录失败：' + (err.message || err.error_description || JSON.stringify(err)).slice(0,120);
+      showToast('打卡失败（写入数据库环节），请截图发给管理员', true);
+      btn.disabled = false;
+      return;
     }
     btn.disabled = false;
   });
