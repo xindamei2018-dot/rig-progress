@@ -562,8 +562,12 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     return String(str).replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_');
   }
   async function uploadAttendancePhoto(file, date, operator, checkType){
-    const ext = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : 'jpg';
-    const path = `${date}/${sanitizeForPath(operator)}-${checkType}-${Date.now()}.${ext}`;
+    const ext = (file.name && file.name.includes('.')) ? file.name.split('.').pop().toLowerCase() : 'jpg';
+    // Supabase Storage object keys must be ASCII-safe — operator names may contain
+    // Chinese characters, so keep the path itself ASCII-only and store the
+    // operator/photo association in the database row instead.
+    const randomId = Math.random().toString(36).slice(2, 8);
+    const path = `${date}/${checkType}-${Date.now()}-${randomId}.${ext}`;
     const { error } = await sb.storage.from('attendance-photos').upload(path, file, { upsert: false });
     if(error) throw error;
     const { data } = sb.storage.from('attendance-photos').getPublicUrl(path);
