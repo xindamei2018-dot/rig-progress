@@ -193,6 +193,48 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
 .attend-badge.in{ background:rgba(79,154,90,0.15); color:#7bc487; }
 .attend-badge.out{ background:rgba(107,122,138,0.2); color:var(--steel); }
 .attend-badge.missing{ background:rgba(217,72,58,0.15); color:#e78077; }
+
+/* repair & inventory */
+.order-card{ background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+.order-card.urgent{ border-color:var(--danger); }
+.order-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.order-title{ font-weight:700; font-size:14px; }
+.order-meta{ font-size:12px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; margin-bottom:6px; }
+.order-desc{ font-size:13px; color:var(--text); margin-bottom:10px; line-height:1.5; }
+.status-badge{ padding:3px 10px; border-radius:10px; font-size:11px; font-weight:600; }
+.status-badge.待处理{ background:rgba(232,148,12,0.15); color:var(--amber); }
+.status-badge.维修中{ background:rgba(107,122,138,0.2); color:var(--steel); }
+.status-badge.已完成{ background:rgba(79,154,90,0.15); color:#7bc487; }
+.status-badge.无法修复{ background:rgba(217,72,58,0.15); color:#e78077; }
+.urgency-badge{ padding:2px 8px; border-radius:10px; font-size:11px; background:rgba(217,72,58,0.15); color:#e78077; }
+.order-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.order-actions select, .order-actions input{
+  background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:var(--radius);
+  padding:6px 10px; font-size:12px; font-family:'JetBrains Mono',monospace;
+}
+.order-actions button{
+  background:var(--amber); color:#1a1509; border:none; border-radius:var(--radius); padding:6px 12px;
+  font-size:12px; font-weight:700; cursor:pointer; font-family:'Oswald',sans-serif;
+}
+.order-actions button.ghost{ background:transparent; border:1px solid var(--line); color:var(--text-dim); }
+.parts-list{ margin-top:8px; font-size:12px; color:var(--text-dim); }
+.parts-list .part-row{ display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px dashed var(--line); }
+.inv-row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  padding:12px 14px; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); margin-bottom:8px;
+}
+.inv-row.low{ border-color:var(--danger); background:rgba(217,72,58,0.06); }
+.inv-name{ font-weight:700; font-size:14px; min-width:120px; }
+.inv-meta{ font-size:12px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+.inv-qty{ font-size:16px; font-weight:700; color:var(--amber); font-family:'JetBrains Mono',monospace; }
+.inv-qty.low{ color:var(--danger); }
+
+/* badges */
+.badges-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:16px; }
+.badge-card{ background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:16px; text-align:center; }
+.badge-card canvas{ background:#fff; padding:8px; border-radius:4px; max-width:100%; height:auto; }
+.badge-name{ margin-top:10px; font-weight:700; font-size:14px; }
+.badge-role{ font-size:11px; color:var(--text-dim); margin-top:2px; }
 </style>
 </head>
 <body>
@@ -237,17 +279,26 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     <div id="login-msg" class="login-msg"></div>
 
     <div class="field">
-      <label>操作手姓名</label>
+      <label>姓名</label>
       <input id="login-name" type="text" placeholder="例如：王建国" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>工种（仅首次注册时选择，之后自动识别）</label>
+      <select id="login-role">
+        <option value="操作手">操作手（旋挖钻机）</option>
+        <option value="维修人员">维修人员（车间/仓库）</option>
+      </select>
     </div>
     <div class="field">
       <label>登录密码（4位数字）</label>
       <input id="login-pin" type="password" inputmode="numeric" maxlength="6" placeholder="••••">
     </div>
     <button class="btn" id="login-btn">登录 / 首次注册</button>
+    <button class="btn-ghost" id="scan-login-btn">扫码登录（扫工牌二维码）</button>
     <button class="btn-ghost" id="supervisor-btn">以查看模式进入（不填报，仅查看台账）</button>
+    <input type="file" id="scan-login-input" accept="image/*" capture="environment" style="display:none;">
 
-    <div class="login-note">首次输入姓名与密码即自动注册；之后使用同样姓名+密码登录。数据保存在 Supabase 云端，独立于任何第三方平台运行。</div>
+    <div class="login-note">首次输入姓名、选择工种与密码即自动注册；之后使用同样姓名+密码登录，工种会自动识别，不需要每次选。数据保存在 Supabase 云端，独立于任何第三方平台运行。</div>
   </div>
 </div>
 
@@ -266,9 +317,13 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   <div class="tabs">
     <div class="tab active" data-view="entry">今日填报</div>
     <div class="tab" data-view="attendance">考勤打卡</div>
+    <div class="tab" data-view="repair-report">报修</div>
     <div class="tab" data-view="ledger">施工台账</div>
     <div class="tab" data-view="stats">统计看板</div>
     <div class="tab" data-view="attendance-overview">考勤总览</div>
+    <div class="tab" data-view="repair-manage">维修管理</div>
+    <div class="tab" data-view="inventory">库存管理</div>
+    <div class="tab" data-view="badges">工牌管理</div>
   </div>
 
   <div class="container">
@@ -351,6 +406,51 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       <input type="file" id="attend-file-input" accept="image/*" capture="environment" style="display:none;">
     </div>
 
+    <!-- ---- REPAIR REPORT VIEW (OPERATOR) ---- -->
+    <div class="view" id="view-repair-report">
+      <div class="panel">
+        <div class="panel-title">报修</div>
+        <div class="grid">
+          <div class="field"><label>类型</label>
+            <select id="rr-type"><option value="设备维保">设备维保（钻机整机）</option><option value="钻具维修">钻具维修（钻头/钻杆等）</option></select>
+          </div>
+          <div class="field" id="rr-rig-field"><label>钻机编号</label><input type="text" id="rr-rig" placeholder="如 XZ-03" class="mono"></div>
+          <div class="field" id="rr-tool-field" style="display:none;"><label>钻具名称</label><input type="text" id="rr-tool" placeholder="如 4m 螺旋钻头" class="mono"></div>
+          <div class="field"><label>故障类别</label>
+            <select id="rr-fault-type">
+              <option value="液压系统">液压系统</option>
+              <option value="电气系统">电气系统</option>
+              <option value="机械/传动">机械/传动</option>
+              <option value="钻具磨损">钻具磨损</option>
+              <option value="发动机">发动机</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="field"><label>紧急程度</label>
+            <select id="rr-urgency"><option value="一般">一般</option><option value="紧急">紧急（影响施工，需尽快处理）</option></select>
+          </div>
+          <div class="field"><label>维修方式</label>
+            <select id="rr-repair-location">
+              <option value="现场维修">现场维修</option>
+              <option value="送车间维修">送车间维修</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>故障描述</label>
+          <input type="text" id="rr-desc" placeholder="具体故障现象，越详细越好">
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm" id="rr-submit-btn" style="max-width:200px;">提交报修</button>
+        </div>
+      </div>
+
+      <div class="today-list">
+        <div class="panel-title" style="margin-bottom:12px;">我的报修工单</div>
+        <div id="rr-my-orders"></div>
+      </div>
+    </div>
+
     <!-- ---- LEDGER VIEW ---- -->
     <div class="view" id="view-ledger">
       <div class="panel" id="backup-reminder" style="display:none; border-color:var(--amber); background:rgba(232,148,12,0.08);">
@@ -413,11 +513,71 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       </div>
     </div>
 
+    <!-- ---- REPAIR MANAGE VIEW (MAINTENANCE STAFF + SUPERVISOR) ---- -->
+    <div class="view" id="view-repair-manage">
+      <div class="panel">
+        <div class="filters">
+          <div class="field"><label>状态筛选</label>
+            <select id="rm-filter-status">
+              <option value="">全部</option>
+              <option value="待处理">待处理</option>
+              <option value="维修中">维修中</option>
+              <option value="已完成">已完成</option>
+              <option value="无法修复">无法修复</option>
+            </select>
+          </div>
+        </div>
+        <div id="rm-order-list"></div>
+      </div>
+    </div>
+
+    <!-- ---- INVENTORY VIEW (MAINTENANCE STAFF + SUPERVISOR) ---- -->
+    <div class="view" id="view-inventory">
+      <div class="panel">
+        <div class="panel-title">新增/编辑备件</div>
+        <div class="grid">
+          <div class="field"><label>备件名称</label><input type="text" id="inv-name" class="mono" placeholder="如 液压密封圈"></div>
+          <div class="field"><label>规格型号</label><input type="text" id="inv-spec" class="mono" placeholder="如 Φ50x3"></div>
+          <div class="field"><label>类别</label>
+            <select id="inv-category">
+              <option value="液压件">液压件</option>
+              <option value="电气件">电气件</option>
+              <option value="钻具配件">钻具配件</option>
+              <option value="易损件">易损件</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="field"><label>单位</label><input type="text" id="inv-unit" class="mono" value="个"></div>
+          <div class="field"><label>当前库存</label><input type="number" step="1" id="inv-qty" class="mono" value="0"></div>
+          <div class="field"><label>预警库存</label><input type="number" step="1" id="inv-min" class="mono" value="0"></div>
+          <div class="field"><label>存放位置</label><input type="text" id="inv-location" class="mono" placeholder="如 车间A架"></div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm" id="inv-add-btn" style="max-width:200px;">新增备件</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">库存清单</div>
+        <div id="inv-list"></div>
+      </div>
+    </div>
+
+    <!-- ---- BADGES VIEW (SUPERVISOR) ---- -->
+    <div class="view" id="view-badges">
+      <div class="panel">
+        <div class="panel-title">操作手电子工牌</div>
+        <div class="login-note" style="margin-bottom:16px;">每张工牌对应一个人的登录凭证，长按图片可保存到手机相册，打印出来发给操作手。工牌丢失或怀疑泄露时，去 Supabase 的 roster 表改一下这个人的密码，旧工牌就会失效。</div>
+        <div id="badges-grid" class="badges-grid"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 (function(){
@@ -460,9 +620,14 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   let currentOperator = null;
+  let currentRole = '操作手'; // '操作手' | '维修人员' — meaningless when isSupervisorMode is true
   let isSupervisorMode = false;
   let allEntries = [];
   let allAttendance = [];
+  let allOrders = [];
+  let allPartsUsed = [];
+  let allInventory = [];
+  let allRoster = [];
   let pollTimer = null;
   let pendingCheckType = null; // 'in' | 'out', set right before opening camera
 
@@ -527,8 +692,8 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     if(error) throw error;
     return data;
   }
-  async function registerRosterUser(name, pin){
-    const { error } = await sb.from('roster').insert({ name, pin });
+  async function registerRosterUser(name, pin, role){
+    const { error } = await sb.from('roster').insert({ name, pin, role });
     if(error) throw error;
   }
   async function getLastBackup(){
@@ -539,6 +704,48 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   async function setLastBackup(ts, by){
     const { error } = await sb.from('backup_meta').upsert({ id: 1, ts, by });
     if(error) throw error;
+  }
+
+  // ---------------- REPAIR / INVENTORY HELPERS ----------------
+  async function loadOrders(){
+    const { data, error } = await sb.from('maintenance_orders').select('*').order('reported_at', {ascending:false});
+    if(error) throw error;
+    allOrders = data || [];
+  }
+  async function addOrderRow(row){
+    const { error } = await sb.from('maintenance_orders').insert(row);
+    if(error) throw error;
+  }
+  async function updateOrderRow(id, patch){
+    const { error } = await sb.from('maintenance_orders').update(patch).eq('id', id);
+    if(error) throw error;
+  }
+  async function loadPartsUsed(){
+    const { data, error } = await sb.from('maintenance_parts_used').select('*').order('used_at', {ascending:false});
+    if(error) throw error;
+    allPartsUsed = data || [];
+  }
+  async function addPartUsedRow(row){
+    const { error } = await sb.from('maintenance_parts_used').insert(row);
+    if(error) throw error;
+  }
+  async function loadInventory(){
+    const { data, error } = await sb.from('inventory_items').select('*').order('name', {ascending:true});
+    if(error) throw error;
+    allInventory = data || [];
+  }
+  async function addInventoryItemRow(row){
+    const { error } = await sb.from('inventory_items').insert(row);
+    if(error) throw error;
+  }
+  async function adjustInventoryQty(id, newQty){
+    const { error } = await sb.from('inventory_items').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', id);
+    if(error) throw error;
+  }
+  async function loadFullRoster(){
+    const { data, error } = await sb.from('roster').select('*').order('name', {ascending:true});
+    if(error) throw error;
+    allRoster = data || [];
   }
 
   // ---------------- ATTENDANCE HELPERS ----------------
@@ -588,6 +795,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   $('login-btn').addEventListener('click', async () => {
     const name = $('login-name').value.trim();
     const pin = $('login-pin').value.trim();
+    const chosenRole = $('login-role').value;
     if(!name){ showLoginMsg('请输入姓名', 'err'); return; }
     if(!/^\d{4,6}$/.test(pin)){ showLoginMsg('密码需为 4-6 位数字', 'err'); return; }
 
@@ -601,9 +809,11 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
           $('login-btn').disabled = false; $('login-btn').textContent = '登录 / 首次注册';
           return;
         }
+        currentRole = existing.role || '操作手';
       } else {
-        await registerRosterUser(name, pin);
-        showToast('已为「'+name+'」创建账号');
+        await registerRosterUser(name, pin, chosenRole);
+        currentRole = chosenRole;
+        showToast('已为「'+name+'」创建账号（'+chosenRole+'）');
       }
       currentOperator = name;
       isSupervisorMode = false;
@@ -612,6 +822,53 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       console.error(e);
       showLoginMsg('云端连接失败，请检查网络后重试', 'err');
       $('login-btn').disabled = false; $('login-btn').textContent = '登录 / 首次注册';
+    }
+  });
+
+  // ---------------- SCAN-TO-LOGIN (BADGE QR) ----------------
+  $('scan-login-btn').addEventListener('click', () => {
+    // Open camera synchronously inside the click gesture — see attendance flow for why.
+    $('scan-login-input').value = '';
+    $('scan-login-input').click();
+  });
+  function loadImageFromFile(file){
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
+  $('scan-login-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    showLoginMsg('识别工牌中…', 'info');
+    try{
+      const img = await loadImageFromFile(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if(!code){
+        showLoginMsg('未识别到二维码，请对准工牌重新拍摄，确保光线充足、画面清晰', 'err');
+        return;
+      }
+      let payload;
+      try{ payload = JSON.parse(code.data); }catch(err){ payload = null; }
+      if(!payload || !payload.n || !payload.p){
+        showLoginMsg('这不是有效的工牌二维码', 'err');
+        return;
+      }
+      $('login-name').value = payload.n;
+      $('login-pin').value = payload.p;
+      showLoginMsg('识别成功，正在登录…', 'info');
+      $('login-btn').click();
+    }catch(err){
+      console.error(err);
+      showLoginMsg('识别失败，请重试', 'err');
     }
   });
 
@@ -635,28 +892,55 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     try{
       await loadEntries();
       await loadAttendance();
+      await loadOrders();
+      await loadPartsUsed();
+      await loadInventory();
+      if(isSupervisorMode) await loadFullRoster();
       renderTodayEntries();
       renderLedger();
       renderStats();
       checkBackupReminder();
       if(document.getElementById('view-attendance').classList.contains('active')) renderAttendanceCards();
       if(document.getElementById('view-attendance-overview').classList.contains('active')) renderAttendanceOverview();
+      if(document.getElementById('view-repair-report').classList.contains('active')) renderMyOrders();
+      if(document.getElementById('view-repair-manage').classList.contains('active')) renderRepairManage();
+      if(document.getElementById('view-inventory').classList.contains('active')) renderInventory();
+      if(document.getElementById('view-badges').classList.contains('active')) renderBadges();
     }catch(e){
       console.error(e);
       setConnDot(false);
     }
   }
 
+  function setTabVisible(view, visible){
+    const el = document.querySelector('.tab[data-view="'+view+'"]');
+    if(el) el.style.display = visible ? 'block' : 'none';
+  }
+
   async function enterApp(){
     $('login-screen').style.display = 'none';
     $('app').style.display = 'block';
-    $('op-name-chip').textContent = currentOperator + (isSupervisorMode ? '（查看模式）' : '');
+    $('op-name-chip').textContent = currentOperator + (isSupervisorMode ? '（查看模式）' : ('（' + currentRole + '）'));
     $('f-date').value = todayISO();
     $('att-date').value = todayISO();
-    document.querySelector('.tab[data-view="entry"]').style.display = isSupervisorMode ? 'none' : 'block';
-    document.querySelector('.tab[data-view="attendance"]').style.display = isSupervisorMode ? 'none' : 'block';
-    document.querySelector('.tab[data-view="attendance-overview"]').style.display = isSupervisorMode ? 'block' : 'none';
+
+    const isOperator = !isSupervisorMode && currentRole === '操作手';
+    const isMaintenance = !isSupervisorMode && currentRole === '维修人员';
+
+    setTabVisible('entry', isOperator);
+    setTabVisible('repair-report', isOperator);
+    setTabVisible('ledger', isOperator || isSupervisorMode);
+    setTabVisible('stats', isOperator || isSupervisorMode);
+    setTabVisible('attendance', isOperator || isMaintenance);
+    setTabVisible('attendance-overview', isSupervisorMode);
+    setTabVisible('repair-manage', isMaintenance || isSupervisorMode);
+    setTabVisible('inventory', isMaintenance || isSupervisorMode);
+    setTabVisible('badges', isSupervisorMode);
+
     if(isSupervisorMode) switchView('ledger');
+    else if(isMaintenance) switchView('repair-manage');
+    else switchView('entry');
+
     await refreshAll();
     if(pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(refreshAll, 20000); // light polling for near-real-time sync
@@ -674,6 +958,10 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     if(view==='stats') renderStats();
     if(view==='attendance') renderAttendanceCards();
     if(view==='attendance-overview') renderAttendanceOverview();
+    if(view==='repair-report') renderMyOrders();
+    if(view==='repair-manage') renderRepairManage();
+    if(view==='inventory') renderInventory();
+    if(view==='badges') renderBadges();
   }
 
   // ---------------- ENTRY SUBMIT ----------------
@@ -1033,6 +1321,253 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   }
   const attDateEl = document.getElementById('att-date');
   if(attDateEl) attDateEl.addEventListener('change', renderAttendanceOverview);
+
+  // ---------------- REPAIR: OPERATOR REPORT FORM ----------------
+  const rrTypeEl = $('rr-type');
+  if(rrTypeEl){
+    rrTypeEl.addEventListener('change', () => {
+      const isTool = rrTypeEl.value === '钻具维修';
+      $('rr-rig-field').style.display = isTool ? 'none' : 'block';
+      $('rr-tool-field').style.display = isTool ? 'block' : 'none';
+    });
+  }
+
+  const rrSubmitBtn = $('rr-submit-btn');
+  if(rrSubmitBtn){
+    rrSubmitBtn.addEventListener('click', async () => {
+      const type = $('rr-type').value;
+      const rig = $('rr-rig').value.trim();
+      const tool = $('rr-tool').value.trim();
+      const desc = $('rr-desc').value.trim();
+      if(type === '设备维保' && !rig){ showToast('请填写钻机编号', true); return; }
+      if(type === '钻具维修' && !tool){ showToast('请填写钻具名称', true); return; }
+      if(!desc){ showToast('请填写故障描述', true); return; }
+
+      rrSubmitBtn.disabled = true; rrSubmitBtn.textContent = '提交中…';
+      try{
+        await addOrderRow({
+          type, rig: type==='设备维保' ? rig : null, tool_name: type==='钻具维修' ? tool : null,
+          reported_by: currentOperator, reported_at: Date.now(),
+          fault_type: $('rr-fault-type').value, fault_desc: desc,
+          urgency: $('rr-urgency').value, status: '待处理',
+          repair_location: $('rr-repair-location').value
+        });
+        showToast('报修已提交');
+        ['rr-rig','rr-tool','rr-desc'].forEach(id=>$(id).value='');
+        await refreshAll();
+      }catch(e){
+        console.error(e);
+        showToast('提交失败：' + (e.message||''), true);
+      }
+      rrSubmitBtn.disabled = false; rrSubmitBtn.textContent = '提交报修';
+    });
+  }
+
+  function partsForOrder(orderId){
+    return allPartsUsed.filter(p => p.order_id === orderId);
+  }
+
+  function renderMyOrders(){
+    const wrap = $('rr-my-orders');
+    if(!wrap) return;
+    const mine = allOrders.filter(o => o.reported_by === currentOperator);
+    if(mine.length===0){
+      wrap.innerHTML = '<div class="empty-state"><div class="big">还没有报修记录</div></div>';
+      return;
+    }
+    wrap.innerHTML = mine.map(o => {
+      const parts = partsForOrder(o.id);
+      const target = o.type === '设备维保' ? ('钻机 ' + escapeHtml(o.rig||'')) : ('钻具 ' + escapeHtml(o.tool_name||''));
+      return `
+        <div class="order-card ${o.urgency==='紧急'?'urgent':''}">
+          <div class="order-top">
+            <div class="order-title">${escapeHtml(o.type)} · ${target}</div>
+            <span class="status-badge ${escapeHtml(o.status)}">${escapeHtml(o.status)}</span>
+          </div>
+          <div class="order-meta">${new Date(o.reported_at).toLocaleString('zh-CN')} · ${escapeHtml(o.fault_type||'')} · ${escapeHtml(o.repair_location||'现场维修')} ${o.urgency==='紧急' ? '<span class="urgency-badge">紧急</span>' : ''}</div>
+          <div class="order-desc">${escapeHtml(o.fault_desc)}</div>
+          ${o.remarks ? `<div class="order-desc" style="color:var(--text-dim);">维修备注：${escapeHtml(o.remarks)}</div>` : ''}
+          ${parts.length>0 ? `<div class="parts-list">${parts.map(p=>`<div class="part-row"><span>${escapeHtml(p.item_name)}</span><span>×${p.quantity_used}</span></div>`).join('')}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ---------------- REPAIR: MANAGE (MAINTENANCE STAFF + SUPERVISOR) ----------------
+  const rmFilterEl = $('rm-filter-status');
+  if(rmFilterEl) rmFilterEl.addEventListener('change', renderRepairManage);
+
+  function renderRepairManage(){
+    const wrap = $('rm-order-list');
+    if(!wrap) return;
+    const filterStatus = $('rm-filter-status').value;
+    const rows = allOrders.filter(o => !filterStatus || o.status === filterStatus);
+    if(rows.length===0){
+      wrap.innerHTML = '<div class="empty-state"><div class="big">暂无符合条件的工单</div></div>';
+      return;
+    }
+    wrap.innerHTML = rows.map(o => {
+      const parts = partsForOrder(o.id);
+      const target = o.type === '设备维保' ? ('钻机 ' + escapeHtml(o.rig||'')) : ('钻具 ' + escapeHtml(o.tool_name||''));
+      const invOptions = allInventory.map(i => `<option value="${i.id}">${escapeHtml(i.name)}（库存${i.quantity}${escapeHtml(i.unit||'')}）</option>`).join('');
+      return `
+        <div class="order-card ${o.urgency==='紧急'?'urgent':''}" data-order-id="${o.id}">
+          <div class="order-top">
+            <div class="order-title">${escapeHtml(o.type)} · ${target}</div>
+            <span class="status-badge ${escapeHtml(o.status)}">${escapeHtml(o.status)}</span>
+          </div>
+          <div class="order-meta">报修人：${escapeHtml(o.reported_by)} · ${new Date(o.reported_at).toLocaleString('zh-CN')} · ${escapeHtml(o.fault_type||'')} · ${escapeHtml(o.repair_location||'现场维修')} ${o.urgency==='紧急' ? '<span class="urgency-badge">紧急</span>' : ''}</div>
+          <div class="order-desc">${escapeHtml(o.fault_desc)}</div>
+          ${parts.length>0 ? `<div class="parts-list">${parts.map(p=>`<div class="part-row"><span>${escapeHtml(p.item_name)}</span><span>×${p.quantity_used}</span></div>`).join('')}</div>` : ''}
+          <div class="order-actions">
+            <select data-status-select="${o.id}">
+              <option value="待处理" ${o.status==='待处理'?'selected':''}>待处理</option>
+              <option value="维修中" ${o.status==='维修中'?'selected':''}>维修中</option>
+              <option value="已完成" ${o.status==='已完成'?'selected':''}>已完成</option>
+              <option value="无法修复" ${o.status==='无法修复'?'selected':''}>无法修复</option>
+            </select>
+            <button data-status-save="${o.id}">更新状态</button>
+            <select data-location-select="${o.id}">
+              <option value="现场维修" ${o.repair_location==='现场维修'?'selected':''}>现场维修</option>
+              <option value="送车间维修" ${o.repair_location==='送车间维修'?'selected':''}>送车间维修</option>
+            </select>
+            <button class="ghost" data-location-save="${o.id}">改维修方式</button>
+            ${allInventory.length>0 ? `
+              <select data-part-select="${o.id}">${invOptions}</select>
+              <input type="number" min="1" value="1" data-part-qty="${o.id}" style="width:60px;">
+              <button class="ghost" data-part-add="${o.id}">领用配件</button>
+            ` : ''}
+          </div>
+          <div class="field" style="margin-top:10px; margin-bottom:0;">
+            <input type="text" placeholder="维修备注（可选）" data-remarks-input="${o.id}" value="${escapeHtml(o.remarks||'')}">
+          </div>
+          <div class="row-actions" style="margin-top:8px;">
+            <button class="btn-ghost" style="width:auto; margin-top:0;" data-remarks-save="${o.id}">保存备注</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    wrap.querySelectorAll('[data-status-save]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.statusSave;
+        const select = wrap.querySelector(`[data-status-select="${id}"]`);
+        const newStatus = select.value;
+        const patch = { status: newStatus };
+        const order = allOrders.find(o=>o.id===id);
+        if(newStatus === '维修中' && order && !order.start_time) patch.start_time = Date.now();
+        if((newStatus === '已完成' || newStatus === '无法修复') && order && !order.end_time){
+          patch.end_time = Date.now();
+          if(order.start_time) patch.downtime_hrs = Math.round(((Date.now() - order.start_time) / 3600000) * 10) / 10;
+        }
+        try{ await updateOrderRow(id, patch); showToast('状态已更新'); await refreshAll(); }
+        catch(e){ showToast('更新失败：' + (e.message||''), true); }
+      });
+    });
+    wrap.querySelectorAll('[data-location-save]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.locationSave;
+        const select = wrap.querySelector(`[data-location-select="${id}"]`);
+        try{ await updateOrderRow(id, { repair_location: select.value }); showToast('维修方式已更新'); await refreshAll(); }
+        catch(e){ showToast('更新失败：' + (e.message||''), true); }
+      });
+    });
+    wrap.querySelectorAll('[data-part-add]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.partAdd;
+        const itemSelect = wrap.querySelector(`[data-part-select="${id}"]`);
+        const qtyInput = wrap.querySelector(`[data-part-qty="${id}"]`);
+        const itemId = itemSelect.value;
+        const qty = parseFloat(qtyInput.value) || 0;
+        const item = allInventory.find(i => i.id === itemId);
+        if(!item || qty <= 0){ showToast('请选择配件并填写数量', true); return; }
+        if(qty > item.quantity){ showToast(`库存不足（当前库存 ${item.quantity}${item.unit||''}）`, true); return; }
+        try{
+          await addPartUsedRow({ order_id: id, item_id: itemId, item_name: item.name, quantity_used: qty, used_at: Date.now() });
+          await adjustInventoryQty(itemId, item.quantity - qty);
+          showToast(`已领用 ${item.name} ×${qty}`);
+          await refreshAll();
+        }catch(e){ showToast('领用失败：' + (e.message||''), true); }
+      });
+    });
+    wrap.querySelectorAll('[data-remarks-save]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.remarksSave;
+        const input = wrap.querySelector(`[data-remarks-input="${id}"]`);
+        try{ await updateOrderRow(id, { remarks: input.value.trim() }); showToast('备注已保存'); await refreshAll(); }
+        catch(e){ showToast('保存失败：' + (e.message||''), true); }
+      });
+    });
+  }
+
+  // ---------------- INVENTORY ----------------
+  const invAddBtn = $('inv-add-btn');
+  if(invAddBtn){
+    invAddBtn.addEventListener('click', async () => {
+      const name = $('inv-name').value.trim();
+      if(!name){ showToast('请填写备件名称', true); return; }
+      invAddBtn.disabled = true;
+      try{
+        await addInventoryItemRow({
+          name, spec: $('inv-spec').value.trim(), category: $('inv-category').value,
+          unit: $('inv-unit').value.trim() || '个', quantity: parseFloat($('inv-qty').value) || 0,
+          min_stock: parseFloat($('inv-min').value) || 0, location: $('inv-location').value.trim()
+        });
+        showToast('已新增备件');
+        ['inv-name','inv-spec','inv-location'].forEach(id=>$(id).value='');
+        $('inv-qty').value = '0'; $('inv-min').value = '0';
+        await refreshAll();
+      }catch(e){ showToast('新增失败：' + (e.message||''), true); }
+      invAddBtn.disabled = false;
+    });
+  }
+
+  function renderInventory(){
+    const wrap = $('inv-list');
+    if(!wrap) return;
+    if(allInventory.length===0){
+      wrap.innerHTML = '<div class="empty-state"><div class="big">还没有备件记录</div></div>';
+      return;
+    }
+    wrap.innerHTML = allInventory.map(i => {
+      const low = i.min_stock > 0 && i.quantity <= i.min_stock;
+      return `
+        <div class="inv-row ${low?'low':''}">
+          <div>
+            <div class="inv-name">${escapeHtml(i.name)} ${i.spec?`<span class="inv-meta">(${escapeHtml(i.spec)})</span>`:''}</div>
+            <div class="inv-meta">${escapeHtml(i.category||'')} · ${escapeHtml(i.location||'未标注位置')}</div>
+          </div>
+          <div class="inv-qty ${low?'low':''}">${i.quantity}${escapeHtml(i.unit||'')}${low?' ⚠低库存':''}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ---------------- BADGES (QR LOGIN CARDS) ----------------
+  function renderBadges(){
+    const grid = $('badges-grid');
+    if(!grid) return;
+    if(allRoster.length===0){
+      grid.innerHTML = '<div class="empty-state"><div class="big">还没有人注册过账号</div></div>';
+      return;
+    }
+    grid.innerHTML = allRoster.map((r, idx) => `
+      <div class="badge-card">
+        <canvas id="badge-canvas-${idx}"></canvas>
+        <div class="badge-name">${escapeHtml(r.name)}</div>
+        <div class="badge-role">${escapeHtml(r.role||'操作手')}</div>
+      </div>
+    `).join('');
+    allRoster.forEach((r, idx) => {
+      const canvas = document.getElementById('badge-canvas-' + idx);
+      if(canvas && window.QRCode){
+        const payload = JSON.stringify({ n: r.name, p: r.pin });
+        QRCode.toCanvas(canvas, payload, { width: 160, margin: 1 }, (err) => {
+          if(err) console.error('生成工牌二维码失败', err);
+        });
+      }
+    });
+  }
 
 })();
 </script>
