@@ -534,7 +534,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
 
     <!-- ---- INVENTORY VIEW (MAINTENANCE STAFF + SUPERVISOR) ---- -->
     <div class="view" id="view-inventory">
-      <div class="panel">
+      <div class="panel" id="inv-add-panel">
         <div class="panel-title">新增/编辑备件</div>
         <div class="grid">
           <div class="field"><label>备件名称</label><input type="text" id="inv-name" class="mono" placeholder="如 液压密封圈"></div>
@@ -559,6 +559,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       </div>
       <div class="panel">
         <div class="panel-title">库存清单</div>
+        <div class="login-note" id="inv-readonly-note" style="display:none; margin-bottom:12px;">你当前是查看权限，库存数量的增减由领用配件时自动扣减，如需新增备件或修改库存，请联系管理员。</div>
         <div id="inv-list"></div>
       </div>
     </div>
@@ -941,6 +942,10 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     if(reporterField) reporterField.style.display = isSupervisorMode ? 'block' : 'none';
     const myOrdersWrap = $('rr-my-orders-wrap');
     if(myOrdersWrap) myOrdersWrap.style.display = isSupervisorMode ? 'none' : 'block';
+    const invAddPanel = $('inv-add-panel');
+    if(invAddPanel) invAddPanel.style.display = isSupervisorMode ? 'block' : 'none';
+    const invReadonlyNote = $('inv-readonly-note');
+    if(invReadonlyNote) invReadonlyNote.style.display = isSupervisorMode ? 'none' : 'block';
 
     if(isSupervisorMode) switchView('ledger');
     else if(isMaintenance) switchView('repair-manage');
