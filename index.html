@@ -929,7 +929,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     const isMaintenance = !isSupervisorMode && currentRole === '维修人员';
 
     setTabVisible('entry', isOperator);
-    setTabVisible('repair-report', isOperator || isSupervisorMode);
+    setTabVisible('repair-report', isOperator || isMaintenance || isSupervisorMode);
     setTabVisible('ledger', isOperator || isSupervisorMode);
     setTabVisible('stats', isOperator || isSupervisorMode);
     setTabVisible('attendance', isOperator || isMaintenance);
