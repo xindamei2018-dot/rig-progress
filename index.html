@@ -411,6 +411,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       <div class="panel">
         <div class="panel-title">报修</div>
         <div class="grid">
+          <div class="field" id="rr-reporter-field" style="display:none;"><label>报修人</label><input type="text" id="rr-reporter" class="mono" placeholder="填写实际报修人姓名"></div>
           <div class="field"><label>类型</label>
             <select id="rr-type"><option value="设备维保">设备维保（钻机整机）</option><option value="钻具维修">钻具维修（钻头/钻杆等）</option></select>
           </div>
@@ -445,7 +446,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
         </div>
       </div>
 
-      <div class="today-list">
+      <div class="today-list" id="rr-my-orders-wrap">
         <div class="panel-title" style="margin-bottom:12px;">我的报修工单</div>
         <div id="rr-my-orders"></div>
       </div>
@@ -928,7 +929,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     const isMaintenance = !isSupervisorMode && currentRole === '维修人员';
 
     setTabVisible('entry', isOperator);
-    setTabVisible('repair-report', isOperator);
+    setTabVisible('repair-report', isOperator || isSupervisorMode);
     setTabVisible('ledger', isOperator || isSupervisorMode);
     setTabVisible('stats', isOperator || isSupervisorMode);
     setTabVisible('attendance', isOperator || isMaintenance);
@@ -936,6 +937,10 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     setTabVisible('repair-manage', isMaintenance || isSupervisorMode);
     setTabVisible('inventory', isMaintenance || isSupervisorMode);
     setTabVisible('badges', isSupervisorMode);
+    const reporterField = $('rr-reporter-field');
+    if(reporterField) reporterField.style.display = isSupervisorMode ? 'block' : 'none';
+    const myOrdersWrap = $('rr-my-orders-wrap');
+    if(myOrdersWrap) myOrdersWrap.style.display = isSupervisorMode ? 'none' : 'block';
 
     if(isSupervisorMode) switchView('ledger');
     else if(isMaintenance) switchView('repair-manage');
@@ -1339,6 +1344,8 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       const rig = $('rr-rig').value.trim();
       const tool = $('rr-tool').value.trim();
       const desc = $('rr-desc').value.trim();
+      const reporter = isSupervisorMode ? $('rr-reporter').value.trim() : currentOperator;
+      if(isSupervisorMode && !reporter){ showToast('请填写报修人姓名', true); return; }
       if(type === '设备维保' && !rig){ showToast('请填写钻机编号', true); return; }
       if(type === '钻具维修' && !tool){ showToast('请填写钻具名称', true); return; }
       if(!desc){ showToast('请填写故障描述', true); return; }
@@ -1347,13 +1354,13 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       try{
         await addOrderRow({
           type, rig: type==='设备维保' ? rig : null, tool_name: type==='钻具维修' ? tool : null,
-          reported_by: currentOperator, reported_at: Date.now(),
+          reported_by: reporter, reported_at: Date.now(),
           fault_type: $('rr-fault-type').value, fault_desc: desc,
           urgency: $('rr-urgency').value, status: '待处理',
           repair_location: $('rr-repair-location').value
         });
         showToast('报修已提交');
-        ['rr-rig','rr-tool','rr-desc'].forEach(id=>$(id).value='');
+        ['rr-rig','rr-tool','rr-desc','rr-reporter'].forEach(id=>$(id).value='');
         await refreshAll();
       }catch(e){
         console.error(e);
