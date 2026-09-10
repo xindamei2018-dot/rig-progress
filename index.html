@@ -295,6 +295,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       <label>工种（仅首次注册时选择，之后自动识别）</label>
       <select id="login-role">
         <option value="操作手">操作手（旋挖钻机）</option>
+        <option value="操作手（双轴搅拌）">操作手（双轴搅拌）</option>
         <option value="维修人员">维修人员（车间/仓库）</option>
       </select>
     </div>
@@ -326,9 +327,11 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
 
   <div class="tabs">
     <div class="tab active" data-view="entry">今日填报</div>
+    <div class="tab" data-view="mixing-entry">搅拌填报</div>
     <div class="tab" data-view="attendance">考勤打卡</div>
     <div class="tab" data-view="repair-report">报修</div>
     <div class="tab" data-view="ledger">施工台账</div>
+    <div class="tab" data-view="mixing-ledger">搅拌台账</div>
     <div class="tab" data-view="stats">统计看板</div>
     <div class="tab" data-view="attendance-overview">考勤总览</div>
     <div class="tab" data-view="repair-manage">维修管理</div>
@@ -395,7 +398,57 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       </div>
     </div>
 
-    <!-- ---- ATTENDANCE (CHECK-IN) VIEW ---- -->
+    <!-- ---- MIXING PILE ENTRY VIEW (双轴搅拌操作手) ---- -->
+    <div class="view" id="view-mixing-entry">
+      <div class="panel">
+        <div class="panel-title">新增双轴搅拌桩记录</div>
+        <div class="grid">
+          <div class="field"><label>日期</label><input type="date" id="m-date"></div>
+          <div class="field"><label>搅拌机编号</label><input type="text" id="m-machine" placeholder="如 SJB-02" class="mono"></div>
+          <div class="field"><label>桩号</label><input type="text" id="m-pile" placeholder="如 SJ-B12-008" class="mono"></div>
+          <div class="field"><label>设计孔深 (m)</label><input type="number" step="0.1" id="m-design-depth" class="mono"></div>
+          <div class="field"><label>实际孔深 (m)</label><input type="number" step="0.1" id="m-actual-depth" class="mono"></div>
+          <div class="field"><label>开钻时间</label><input type="time" id="m-start-time"></div>
+          <div class="field"><label>完钻时间</label><input type="time" id="m-end-time"></div>
+          <div class="field"><label>搭接宽度 (mm)</label><input type="number" step="1" id="m-overlap" class="mono" placeholder="如 150"></div>
+          <div class="field"><label>水泥掺量 (%)</label><input type="number" step="0.1" id="m-cement" class="mono" placeholder="如 12"></div>
+          <div class="field"><label>水灰比</label><input type="number" step="0.1" id="m-wc-ratio" class="mono" placeholder="如 0.6"></div>
+          <div class="field"><label>垂直度偏差</label><input type="text" id="m-verticality" class="mono" placeholder="如 1/180"></div>
+          <div class="field"><label>喷浆次数</label>
+            <select id="m-spray-passes">
+              <option value="两搓两喷">两搓两喷</option>
+              <option value="四搓两喷">四搓两喷</option>
+              <option value="其他">其他（备注说明）</option>
+            </select>
+          </div>
+          <div class="field"><label>停机时长 (h)</label><input type="number" step="0.1" id="m-downtime-hrs" class="mono" value="0"></div>
+          <div class="field"><label>停机原因</label>
+            <select id="m-downtime-reason">
+              <option value="无">无</option>
+              <option value="设备故障">设备故障</option>
+              <option value="等图纸/桩位">等图纸/桩位</option>
+              <option value="等材料">等材料</option>
+              <option value="恶劣天气">恶劣天气</option>
+              <option value="地下障碍物">地下障碍物</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>备注</label>
+          <input type="text" id="m-remarks" placeholder="冒浆异常、地面隆起、搭接不上等情况">
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm" id="m-submit-btn" style="max-width:220px;">提交本条记录</button>
+        </div>
+      </div>
+
+      <div class="today-list">
+        <div class="panel-title" style="margin-bottom:12px;">我今日已提交记录</div>
+        <div id="m-today-entries"></div>
+      </div>
+    </div>
+
     <div class="view" id="view-attendance">
       <div class="panel">
         <div class="panel-title">今日考勤打卡</div>
@@ -496,6 +549,35 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
         <div id="ledger-empty" class="empty-state" style="display:none;">
           <div class="big">暂无符合条件的记录</div>
           <div>调整筛选条件，或前往「今日填报」新增数据</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- MIXING LEDGER VIEW ---- -->
+    <div class="view" id="view-mixing-ledger">
+      <div class="panel">
+        <div class="filters">
+          <div class="field"><label>起始日期</label><input type="date" id="m-flt-start"></div>
+          <div class="field"><label>结束日期</label><input type="date" id="m-flt-end"></div>
+          <div class="field" id="m-flt-operator-wrap"><label>操作手</label><select id="m-flt-operator"><option value="">全部</option></select></div>
+          <div class="field"><label>搅拌机编号</label><input type="text" id="m-flt-machine" placeholder="全部" class="mono"></div>
+        </div>
+        <div class="row-actions" style="margin-top:0; margin-bottom:14px; justify-content:space-between;">
+          <div id="m-ledger-count" class="mono" style="font-size:12px; color:var(--text-dim); align-self:center;"></div>
+          <button class="btn-ghost" style="width:auto; margin-top:0;" id="m-export-csv-btn">导出 CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>日期</th><th>操作手</th><th>搅拌机</th><th>桩号</th><th>孔深进度</th><th>用时</th>
+              <th>搭接(mm)</th><th>水泥掺量</th><th>水灰比</th><th>垂直度</th><th>喷浆</th><th>停机</th><th>备注</th><th></th>
+            </tr></thead>
+            <tbody id="m-ledger-body"></tbody>
+          </table>
+        </div>
+        <div id="m-ledger-empty" class="empty-state" style="display:none;">
+          <div class="big">暂无符合条件的记录</div>
+          <div>调整筛选条件，或前往「搅拌填报」新增数据</div>
         </div>
       </div>
     </div>
@@ -635,6 +717,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   let currentRole = '操作手'; // '操作手' | '维修人员' — meaningless when isSupervisorMode is true
   let isSupervisorMode = false;
   let allEntries = [];
+  let allMixingEntries = [];
   let allAttendance = [];
   let allOrders = [];
   let allPartsUsed = [];
@@ -697,6 +780,43 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   }
   async function removeEntryRow(id){
     const { error } = await sb.from('entries').delete().eq('id', id);
+    if(error) throw error;
+  }
+
+  // ---------------- MIXING PILE DB MAPPING & HELPERS ----------------
+  function fromMixingRow(r){
+    return {
+      id: r.id, date: r.date, operator: r.operator, machine: r.machine_no, pile: r.pile_no,
+      overlap: r.overlap_mm, cement: r.cement_content, wcRatio: r.water_cement_ratio,
+      verticality: r.verticality, sprayPasses: r.spray_passes,
+      designDepth: r.design_depth, actualDepth: r.actual_depth,
+      startTime: r.start_time, endTime: r.end_time,
+      downtimeHrs: r.downtime_hrs, downtimeReason: r.downtime_reason,
+      remarks: r.remarks, submittedAt: r.submitted_at
+    };
+  }
+  function toMixingRow(e){
+    return {
+      date: e.date, operator: e.operator, machine_no: e.machine, pile_no: e.pile,
+      overlap_mm: e.overlap, cement_content: e.cement, water_cement_ratio: e.wcRatio,
+      verticality: e.verticality, spray_passes: e.sprayPasses,
+      design_depth: e.designDepth, actual_depth: e.actualDepth,
+      start_time: e.startTime, end_time: e.endTime,
+      downtime_hrs: e.downtimeHrs, downtime_reason: e.downtimeReason,
+      remarks: e.remarks, submitted_at: e.submittedAt
+    };
+  }
+  async function loadMixingEntries(){
+    const { data, error } = await sb.from('mixing_entries').select('*').order('date', {ascending:false});
+    if(error) throw error;
+    allMixingEntries = (data||[]).map(fromMixingRow);
+  }
+  async function addMixingEntryRow(entry){
+    const { error } = await sb.from('mixing_entries').insert(toMixingRow(entry));
+    if(error) throw error;
+  }
+  async function removeMixingEntryRow(id){
+    const { error } = await sb.from('mixing_entries').delete().eq('id', id);
     if(error) throw error;
   }
   async function findRosterUser(name){
@@ -903,6 +1023,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   async function refreshAll(){
     try{
       await loadEntries();
+      await loadMixingEntries();
       await loadAttendance();
       await loadOrders();
       await loadPartsUsed();
@@ -912,6 +1033,8 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       renderLedger();
       renderStats();
       checkBackupReminder();
+      if(document.getElementById('view-mixing-entry').classList.contains('active')) renderTodayMixingEntries();
+      if(document.getElementById('view-mixing-ledger').classList.contains('active')) renderMixingLedger();
       if(document.getElementById('view-attendance').classList.contains('active')) renderAttendanceCards();
       if(document.getElementById('view-attendance-overview').classList.contains('active')) renderAttendanceOverview();
       if(document.getElementById('view-repair-report').classList.contains('active')) renderMyOrders();
@@ -934,16 +1057,20 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     $('app').style.display = 'block';
     $('op-name-chip').textContent = currentOperator + (isSupervisorMode ? '（查看模式）' : ('（' + currentRole + '）'));
     $('f-date').value = todayISO();
+    $('m-date').value = todayISO();
     $('att-date').value = todayISO();
 
     const isOperator = !isSupervisorMode && currentRole === '操作手';
+    const isMixingOperator = !isSupervisorMode && currentRole === '操作手（双轴搅拌）';
     const isMaintenance = !isSupervisorMode && currentRole === '维修人员';
 
     setTabVisible('entry', isOperator);
-    setTabVisible('repair-report', isOperator || isMaintenance || isSupervisorMode);
+    setTabVisible('mixing-entry', isMixingOperator);
+    setTabVisible('repair-report', isOperator || isMixingOperator || isMaintenance || isSupervisorMode);
     setTabVisible('ledger', isOperator || isSupervisorMode);
+    setTabVisible('mixing-ledger', isMixingOperator || isSupervisorMode);
     setTabVisible('stats', isOperator || isSupervisorMode);
-    setTabVisible('attendance', isOperator || isMaintenance);
+    setTabVisible('attendance', isOperator || isMixingOperator || isMaintenance);
     setTabVisible('attendance-overview', isSupervisorMode);
     setTabVisible('repair-manage', isMaintenance || isSupervisorMode);
     setTabVisible('inventory', isMaintenance || isSupervisorMode);
@@ -959,6 +1086,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
 
     if(isSupervisorMode) switchView('ledger');
     else if(isMaintenance) switchView('repair-manage');
+    else if(isMixingOperator) switchView('mixing-entry');
     else switchView('entry');
 
     await refreshAll();
@@ -975,6 +1103,8 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     $('view-'+view).classList.add('active');
     if(view==='ledger'){ renderLedger(); checkBackupReminder(); }
+    if(view==='mixing-ledger') renderMixingLedger();
+    if(view==='mixing-entry') renderTodayMixingEntries();
     if(view==='stats') renderStats();
     if(view==='attendance') renderAttendanceCards();
     if(view==='attendance-overview') renderAttendanceOverview();
@@ -1051,6 +1181,162 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     });
   }
   $('f-date').addEventListener('change', renderTodayEntries);
+
+  // ---------------- MIXING PILE ENTRY (双轴搅拌操作手) ----------------
+  $('m-submit-btn').addEventListener('click', async () => {
+    const pile = $('m-pile').value.trim();
+    const date = $('m-date').value;
+    const machine = $('m-machine').value.trim();
+    if(!date){ showToast('请选择日期', true); return; }
+    if(!machine){ showToast('请填写搅拌机编号', true); return; }
+    if(!pile){ showToast('请填写桩号', true); return; }
+
+    const entry = {
+      date, operator: currentOperator, machine, pile,
+      designDepth: parseFloat($('m-design-depth').value) || 0,
+      actualDepth: parseFloat($('m-actual-depth').value) || 0,
+      startTime: $('m-start-time').value, endTime: $('m-end-time').value,
+      overlap: parseFloat($('m-overlap').value) || null,
+      cement: parseFloat($('m-cement').value) || null,
+      wcRatio: parseFloat($('m-wc-ratio').value) || null,
+      verticality: $('m-verticality').value.trim(),
+      sprayPasses: $('m-spray-passes').value,
+      downtimeHrs: parseFloat($('m-downtime-hrs').value) || 0,
+      downtimeReason: $('m-downtime-reason').value,
+      remarks: $('m-remarks').value.trim(),
+      submittedAt: Date.now()
+    };
+
+    const btn = $('m-submit-btn');
+    btn.disabled = true; btn.textContent = '提交中…';
+    try{
+      await addMixingEntryRow(entry);
+      showToast('已提交并同步至云端 · 桩号 ' + pile);
+      ['m-pile','m-design-depth','m-actual-depth','m-start-time','m-end-time','m-overlap','m-cement','m-wc-ratio','m-verticality','m-remarks'].forEach(id=>$(id).value='');
+      $('m-downtime-hrs').value = '0';
+      await refreshAll();
+    }catch(e){
+      console.error(e);
+      showToast('提交失败，请检查网络后重试', true);
+    }
+    btn.disabled = false; btn.textContent = '提交本条记录';
+  });
+
+  function renderTodayMixingEntries(){
+    const wrap = $('m-today-entries');
+    if(!wrap) return;
+    const mine = allMixingEntries.filter(e => e.operator===currentOperator && e.date===$('m-date').value)
+                            .sort((a,b)=>(b.submittedAt||0) - (a.submittedAt||0));
+    if(mine.length===0){
+      wrap.innerHTML = '<div class="empty-state"><div class="big">今日尚未提交记录</div><div>填写上方表单开始记录本日搅拌桩施工数据</div></div>';
+      return;
+    }
+    wrap.innerHTML = mine.map(e => `
+      <div class="entry-row" data-id="${e.id}">
+        <div class="entry-left">
+          <span class="entry-pile">${escapeHtml(e.pile)}</span>
+          <span class="entry-meta">${e.actualDepth}/${e.designDepth}m</span>
+          <span class="entry-meta">搭接${e.overlap??'--'}mm</span>
+          <span class="entry-meta">水泥掺量${e.cement??'--'}%</span>
+          ${e.downtimeReason!=='无' ? `<span class="tag warn">停机 ${e.downtimeHrs}h · ${escapeHtml(e.downtimeReason)}</span>` : ''}
+        </div>
+        <span class="del-btn" data-mdel="${e.id}">✕</span>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-mdel]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirm('确认删除该条记录？')) return;
+        try{ await removeMixingEntryRow(btn.dataset.mdel); await refreshAll(); showToast('已删除'); }
+        catch(e){ showToast('删除失败，请重试', true); }
+      });
+    });
+  }
+  $('m-date').addEventListener('change', renderTodayMixingEntries);
+
+  // ---------------- MIXING LEDGER ----------------
+  function populateMixingOperatorFilter(){
+    const sel = $('m-flt-operator');
+    if(!isSupervisorMode){
+      sel.innerHTML = `<option value="${escapeHtml(currentOperator)}">${escapeHtml(currentOperator)}（仅本人）</option>`;
+      sel.value = currentOperator;
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    const ops = Array.from(new Set(allMixingEntries.map(e=>e.operator))).sort();
+    const current = sel.value;
+    sel.innerHTML = '<option value="">全部</option>' + ops.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+    sel.value = current;
+  }
+
+  function getFilteredMixingEntries(){
+    const start = $('m-flt-start').value, end = $('m-flt-end').value;
+    const op = isSupervisorMode ? $('m-flt-operator').value : currentOperator;
+    const machine = $('m-flt-machine').value.trim().toLowerCase();
+    return allMixingEntries.filter(e=>{
+      if(!isSupervisorMode && e.operator !== currentOperator) return false;
+      if(start && e.date < start) return false;
+      if(end && e.date > end) return false;
+      if(op && e.operator !== op) return false;
+      if(machine && !(e.machine||'').toLowerCase().includes(machine)) return false;
+      return true;
+    }).sort((a,b)=> b.date.localeCompare(a.date) || (b.submittedAt||0) - (a.submittedAt||0));
+  }
+
+  function renderMixingLedger(){
+    if(!$('m-ledger-body')) return;
+    populateMixingOperatorFilter();
+    const rows = getFilteredMixingEntries();
+    $('m-ledger-count').textContent = rows.length + ' 条记录';
+    $('m-ledger-empty').style.display = rows.length===0 ? 'block' : 'none';
+    $('m-ledger-body').innerHTML = rows.map(e => `
+      <tr>
+        <td>${e.date}</td>
+        <td>${escapeHtml(e.operator)}</td>
+        <td>${escapeHtml(e.machine)}</td>
+        <td>${escapeHtml(e.pile)}</td>
+        <td>${gaugeHtml(e.actualDepth, e.designDepth)}</td>
+        <td>${e.startTime||'--'}–${e.endTime||'--'}</td>
+        <td>${e.overlap??'--'}</td>
+        <td>${e.cement??'--'}%</td>
+        <td>${e.wcRatio??'--'}</td>
+        <td>${escapeHtml(e.verticality)||'--'}</td>
+        <td>${escapeHtml(e.sprayPasses)||'--'}</td>
+        <td>${e.downtimeReason==='无' ? '—' : `<span class="tag warn">${e.downtimeHrs}h ${escapeHtml(e.downtimeReason)}</span>`}</td>
+        <td style="font-family:'Inter',sans-serif; max-width:160px; white-space:normal;">${escapeHtml(e.remarks)||'—'}</td>
+        <td>${(!isSupervisorMode && e.operator===currentOperator) || isSupervisorMode ? `<span class="del-btn" data-m-ledger-del="${e.id}" data-m-ledger-del-owner="${escapeHtml(e.operator)}">✕</span>` : ''}</td>
+      </tr>
+    `).join('');
+    $('m-ledger-body').querySelectorAll('[data-m-ledger-del]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const owner = btn.dataset.mLedgerDelOwner;
+        const msg = (isSupervisorMode && owner !== currentOperator)
+          ? `确认要删除操作手「${owner}」提交的这条记录吗？此操作不可恢复。`
+          : '确认删除该条记录？';
+        if(!confirm(msg)) return;
+        try{ await removeMixingEntryRow(btn.dataset.mLedgerDel); await refreshAll(); showToast('已删除'); }
+        catch(e){ showToast('删除失败，请重试', true); }
+      });
+    });
+  }
+  ['m-flt-start','m-flt-end','m-flt-operator','m-flt-machine'].forEach(id=>{
+    $(id).addEventListener('input', renderMixingLedger);
+    $(id).addEventListener('change', renderMixingLedger);
+  });
+
+  async function doExportMixingCsv(rows){
+    if(rows.length===0){ showToast('没有可导出的数据', true); return; }
+    const headers = ['日期','操作手','搅拌机','桩号','设计孔深m','实际孔深m','开钻','完钻','搭接mm','水泥掺量%','水灰比','垂直度','喷浆次数','停机h','停机原因','备注'];
+    const csvRows = rows.map(e => [e.date,e.operator,e.machine,e.pile,e.designDepth,e.actualDepth,e.startTime,e.endTime,e.overlap,e.cement,e.wcRatio,e.verticality,e.sprayPasses,e.downtimeHrs,e.downtimeReason,(e.remarks||'').replace(/,/g,'、')].join(','));
+    const csv = '\uFEFF' + [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '双轴搅拌桩台账_' + todayISO() + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  $('m-export-csv-btn').addEventListener('click', ()=> doExportMixingCsv(getFilteredMixingEntries()));
 
   // ---------------- LEDGER ----------------
   function populateOperatorFilter(){
