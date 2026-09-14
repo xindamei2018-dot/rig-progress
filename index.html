@@ -335,6 +335,10 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
     </div>
     <button class="btn" id="login-btn">登录 / 首次注册</button>
     <button class="btn-ghost" id="scan-login-btn">扫码登录（扫工牌二维码）</button>
+    <div class="field" style="margin-top:18px; margin-bottom:8px;">
+      <label>查看模式密码（仅管理员本人使用）</label>
+      <input id="supervisor-password" type="password" placeholder="••••" autocomplete="off">
+    </div>
     <button class="btn-ghost" id="supervisor-btn">以查看模式进入（不填报，仅查看台账）</button>
     <input type="file" id="scan-login-input" accept="image/*" capture="environment" style="display:none;">
 
@@ -729,6 +733,8 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   // 只读管理员注册时需要额外输入这个邀请码，防止随便什么人都能注册成管理员。
   // 改这里即可换码，只告诉你信任的管理人员。
   const MANAGER_INVITE_CODE = "MGR-T5-2026";
+  // 查看模式（最高权限）的专属密码，只告诉你自己。改这里即可换密码。
+  const SUPERVISOR_PASSWORD = "BOSS-T5-2026";
 
   function showGateMsg(msg){
     const el = document.getElementById('gate-msg');
@@ -1071,6 +1077,7 @@ const T = {
   "进尺目标": "Footage Target",
   "施工目标已保存": "Target saved",
   "管理员邀请码不正确，请向系统管理员核实": "Invalid manager invite code, please check with your admin",
+  "查看模式密码不正确": "Incorrect viewer mode password",
 };
 
   const LANG_STORAGE_KEY = 'rig_lang_v1';
@@ -1424,6 +1431,11 @@ const T = {
   });
 
   $('supervisor-btn').addEventListener('click', async () => {
+    const pw = $('supervisor-password').value;
+    if(pw !== SUPERVISOR_PASSWORD){
+      showLoginMsg(t('查看模式密码不正确'), 'err');
+      return;
+    }
     currentOperator = '查看模式';
     isSupervisorMode = true;
     await enterApp();
