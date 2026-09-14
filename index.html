@@ -322,7 +322,12 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
         <option value="操作手">操作手（旋挖钻机）</option>
         <option value="操作手（双轴搅拌）">操作手（双轴搅拌）</option>
         <option value="维修人员">维修人员（车间/仓库）</option>
+        <option value="只读管理员">只读管理员（仅查看，不可修改）</option>
       </select>
+    </div>
+    <div class="field" id="manager-invite-field" style="display:none;">
+      <label>管理员邀请码</label>
+      <input id="manager-invite-code" type="text" placeholder="向系统管理员索取" autocomplete="off">
     </div>
     <div class="field">
       <label>登录密码（4位数字）</label>
@@ -721,6 +726,9 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   // 改这里的通行码即可（区分大小写）。改完保存文件重新分发给操作手即可生效。
   const PROJECT_ACCESS_CODE = "T5RIG2026";
   const GATE_STORAGE_KEY = "rig_gate_ok_v1";
+  // 只读管理员注册时需要额外输入这个邀请码，防止随便什么人都能注册成管理员。
+  // 改这里即可换码，只告诉你信任的管理人员。
+  const MANAGER_INVITE_CODE = "MGR-T5-2026";
 
   function showGateMsg(msg){
     const el = document.getElementById('gate-msg');
@@ -807,6 +815,8 @@ const T = {
   "操作手（旋挖钻机）": "Operator (Rotary Drilling Rig)",
   "操作手（双轴搅拌）": "Operator (Twin-shaft Mixing Pile)",
   "维修人员（车间/仓库）": "Maintenance Staff (Workshop/Warehouse)",
+  "只读管理员（仅查看，不可修改）": "Read-only Manager (view only)",
+  "只读管理员": "Read-only Manager",
   "登录密码（4位数字）": "Password (4 digits)",
   "登录 / 首次注册": "Log in / Register",
   "扫码登录（扫工牌二维码）": "Scan to log in (scan badge QR code)",
@@ -1060,6 +1070,7 @@ const T = {
   "桩数目标": "Pile Target",
   "进尺目标": "Footage Target",
   "施工目标已保存": "Target saved",
+  "管理员邀请码不正确，请向系统管理员核实": "Invalid manager invite code, please check with your admin",
 };
 
   const LANG_STORAGE_KEY = 'rig_lang_v1';
@@ -1317,36 +1328,51 @@ const T = {
     el.className = 'login-msg show ' + (type||'info');
   }
 
+  // Show the invite-code field whenever "只读管理员" is selected — only matters
+  // at registration time, but simplest to just show/hide based on the dropdown.
+  const loginRoleEl = $('login-role');
+  if(loginRoleEl){
+    loginRoleEl.addEventListener('change', () => {
+      $('manager-invite-field').style.display = loginRoleEl.value === '只读管理员' ? 'block' : 'none';
+    });
+  }
+
   $('login-btn').addEventListener('click', async () => {
     const name = $('login-name').value.trim();
     const pin = $('login-pin').value.trim();
     const chosenRole = $('login-role').value;
-    if(!name){ showLoginMsg('请输入姓名', 'err'); return; }
-    if(!/^\d{4,6}$/.test(pin)){ showLoginMsg('密码需为 4-6 位数字', 'err'); return; }
+    const inviteCode = $('manager-invite-code').value.trim();
+    if(!name){ showLoginMsg(t('请输入姓名'), 'err'); return; }
+    if(!/^\d{4,6}$/.test(pin)){ showLoginMsg(t('密码需为 4-6 位数字'), 'err'); return; }
 
     $('login-btn').disabled = true;
-    $('login-btn').textContent = '连接云端中…';
+    $('login-btn').textContent = t('连接云端中…');
     try{
       const existing = await findRosterUser(name);
       if(existing){
         if(existing.pin !== pin){
-          showLoginMsg('密码不正确，请重试', 'err');
-          $('login-btn').disabled = false; $('login-btn').textContent = '登录 / 首次注册';
+          showLoginMsg(t('密码不正确，请重试'), 'err');
+          $('login-btn').disabled = false; $('login-btn').textContent = t('登录 / 首次注册');
           return;
         }
         currentRole = existing.role || '操作手';
       } else {
+        if(chosenRole === '只读管理员' && inviteCode !== MANAGER_INVITE_CODE){
+          showLoginMsg(t('管理员邀请码不正确，请向系统管理员核实'), 'err');
+          $('login-btn').disabled = false; $('login-btn').textContent = t('登录 / 首次注册');
+          return;
+        }
         await registerRosterUser(name, pin, chosenRole);
         currentRole = chosenRole;
-        showToast('已为「'+name+'」创建账号（'+chosenRole+'）');
+        showToast(t('已为「') + name + t('」创建账号（') + t(chosenRole) + '）');
       }
       currentOperator = name;
       isSupervisorMode = false;
       await enterApp();
     }catch(e){
       console.error(e);
-      showLoginMsg('云端连接失败，请检查网络后重试', 'err');
-      $('login-btn').disabled = false; $('login-btn').textContent = '登录 / 首次注册';
+      showLoginMsg(t('云端连接失败，请检查网络后重试'), 'err');
+      $('login-btn').disabled = false; $('login-btn').textContent = t('登录 / 首次注册');
     }
   });
 
@@ -1368,7 +1394,7 @@ const T = {
   $('scan-login-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if(!file) return;
-    showLoginMsg('识别工牌中…', 'info');
+    showLoginMsg(t('识别工牌中…'), 'info');
     try{
       const img = await loadImageFromFile(file);
       const canvas = document.createElement('canvas');
@@ -1378,22 +1404,22 @@ const T = {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       if(!code){
-        showLoginMsg('未识别到二维码，请对准工牌重新拍摄，确保光线充足、画面清晰', 'err');
+        showLoginMsg(t('未识别到二维码，请对准工牌重新拍摄，确保光线充足、画面清晰'), 'err');
         return;
       }
       let payload;
       try{ payload = JSON.parse(code.data); }catch(err){ payload = null; }
       if(!payload || !payload.n || !payload.p){
-        showLoginMsg('这不是有效的工牌二维码', 'err');
+        showLoginMsg(t('这不是有效的工牌二维码'), 'err');
         return;
       }
       $('login-name').value = payload.n;
       $('login-pin').value = payload.p;
-      showLoginMsg('识别成功，正在登录…', 'info');
+      showLoginMsg(t('识别成功，正在登录…'), 'info');
       $('login-btn').click();
     }catch(err){
       console.error(err);
-      showLoginMsg('识别失败，请重试', 'err');
+      showLoginMsg(t('识别失败，请重试'), 'err');
     }
   });
 
@@ -1445,6 +1471,12 @@ const T = {
     const el = document.querySelector('.tab[data-view="'+view+'"]');
     if(el) el.style.display = visible ? 'block' : 'none';
   }
+  function canSeeAllData(){
+    return isSupervisorMode || currentRole === '只读管理员';
+  }
+  function canManageRepairs(){
+    return isSupervisorMode || currentRole === '维修人员';
+  }
 
   async function enterApp(){
     $('login-screen').style.display = 'none';
@@ -1457,17 +1489,18 @@ const T = {
     const isOperator = !isSupervisorMode && currentRole === '操作手';
     const isMixingOperator = !isSupervisorMode && currentRole === '操作手（双轴搅拌）';
     const isMaintenance = !isSupervisorMode && currentRole === '维修人员';
+    const isReadOnlyManager = !isSupervisorMode && currentRole === '只读管理员';
 
     setTabVisible('entry', isOperator);
     setTabVisible('mixing-entry', isMixingOperator);
     setTabVisible('repair-report', isOperator || isMixingOperator || isMaintenance || isSupervisorMode);
-    setTabVisible('ledger', isOperator || isSupervisorMode);
-    setTabVisible('mixing-ledger', isMixingOperator || isSupervisorMode);
-    setTabVisible('stats', isOperator || isSupervisorMode);
+    setTabVisible('ledger', isOperator || isSupervisorMode || isReadOnlyManager);
+    setTabVisible('mixing-ledger', isMixingOperator || isSupervisorMode || isReadOnlyManager);
+    setTabVisible('stats', isOperator || isSupervisorMode || isReadOnlyManager);
     setTabVisible('attendance', isOperator || isMixingOperator || isMaintenance);
-    setTabVisible('attendance-overview', isSupervisorMode);
-    setTabVisible('repair-manage', isMaintenance || isSupervisorMode);
-    setTabVisible('inventory', isMaintenance || isSupervisorMode);
+    setTabVisible('attendance-overview', isSupervisorMode || isReadOnlyManager);
+    setTabVisible('repair-manage', isMaintenance || isSupervisorMode || isReadOnlyManager);
+    setTabVisible('inventory', isMaintenance || isSupervisorMode || isReadOnlyManager);
     setTabVisible('badges', isSupervisorMode);
     const reporterField = $('rr-reporter-field');
     if(reporterField) reporterField.style.display = isSupervisorMode ? 'block' : 'none';
@@ -1478,7 +1511,7 @@ const T = {
     const invReadonlyNote = $('inv-readonly-note');
     if(invReadonlyNote) invReadonlyNote.style.display = isSupervisorMode ? 'none' : 'block';
 
-    if(isSupervisorMode) switchView('ledger');
+    if(isSupervisorMode || isReadOnlyManager) switchView('ledger');
     else if(isMaintenance) switchView('repair-manage');
     else if(isMixingOperator) switchView('mixing-entry');
     else switchView('entry');
@@ -1650,7 +1683,7 @@ const T = {
   // ---------------- MIXING LEDGER ----------------
   function populateMixingOperatorFilter(){
     const sel = $('m-flt-operator');
-    if(!isSupervisorMode){
+    if(!canSeeAllData()){
       sel.innerHTML = `<option value="${escapeHtml(currentOperator)}">${escapeHtml(currentOperator)}（${t('仅本人')}）</option>`;
       sel.value = currentOperator;
       sel.disabled = true;
@@ -1665,10 +1698,10 @@ const T = {
 
   function getFilteredMixingEntries(){
     const start = $('m-flt-start').value, end = $('m-flt-end').value;
-    const op = isSupervisorMode ? $('m-flt-operator').value : currentOperator;
+    const op = canSeeAllData() ? $('m-flt-operator').value : currentOperator;
     const machine = $('m-flt-machine').value.trim().toLowerCase();
     return allMixingEntries.filter(e=>{
-      if(!isSupervisorMode && e.operator !== currentOperator) return false;
+      if(!canSeeAllData() && e.operator !== currentOperator) return false;
       if(start && e.date < start) return false;
       if(end && e.date > end) return false;
       if(op && e.operator !== op) return false;
@@ -1698,7 +1731,7 @@ const T = {
         <td>${t(e.sprayPasses)||'--'}</td>
         <td>${e.downtimeReason==='无' ? '—' : `<span class="tag warn">${e.downtimeHrs}h ${t(e.downtimeReason)}</span>`}</td>
         <td style="font-family:'Inter',sans-serif; max-width:160px; white-space:normal;">${escapeHtml(e.remarks)||'—'}</td>
-        <td>${(!isSupervisorMode && e.operator===currentOperator) || isSupervisorMode ? `<span class="del-btn" data-m-ledger-del="${e.id}" data-m-ledger-del-owner="${escapeHtml(e.operator)}">✕</span>` : ''}</td>
+        <td>${(!canSeeAllData() && e.operator===currentOperator) || isSupervisorMode ? `<span class="del-btn" data-m-ledger-del="${e.id}" data-m-ledger-del-owner="${escapeHtml(e.operator)}">✕</span>` : ''}</td>
       </tr>
     `).join('');
     $('m-ledger-body').querySelectorAll('[data-m-ledger-del]').forEach(btn=>{
@@ -1735,7 +1768,7 @@ const T = {
   // ---------------- LEDGER ----------------
   function populateOperatorFilter(){
     const sel = $('flt-operator');
-    if(!isSupervisorMode){
+    if(!canSeeAllData()){
       sel.innerHTML = `<option value="${escapeHtml(currentOperator)}">${escapeHtml(currentOperator)}（${t('仅本人')}）</option>`;
       sel.value = currentOperator;
       sel.disabled = true;
@@ -1759,10 +1792,10 @@ const T = {
 
   function getFilteredEntries(){
     const start = $('flt-start').value, end = $('flt-end').value;
-    const op = isSupervisorMode ? $('flt-operator').value : currentOperator;
+    const op = canSeeAllData() ? $('flt-operator').value : currentOperator;
     const rig = $('flt-rig').value.trim().toLowerCase();
     return allEntries.filter(e=>{
-      if(!isSupervisorMode && e.operator !== currentOperator) return false;
+      if(!canSeeAllData() && e.operator !== currentOperator) return false;
       if(start && e.date < start) return false;
       if(end && e.date > end) return false;
       if(op && e.operator !== op) return false;
@@ -1790,7 +1823,7 @@ const T = {
         <td>${e.concrete}</td>
         <td>${e.downtimeReason==='无' ? '—' : `<span class="tag warn">${e.downtimeHrs}h ${t(e.downtimeReason)}</span>`}</td>
         <td style="font-family:'Inter',sans-serif; max-width:160px; white-space:normal;">${escapeHtml(e.remarks)||'—'}</td>
-        <td>${(!isSupervisorMode && e.operator===currentOperator) || isSupervisorMode ? `<span class="del-btn" data-ledger-del="${e.id}" data-ledger-del-owner="${escapeHtml(e.operator)}">✕</span>` : ''}</td>
+        <td>${(!canSeeAllData() && e.operator===currentOperator) || isSupervisorMode ? `<span class="del-btn" data-ledger-del="${e.id}" data-ledger-del-owner="${escapeHtml(e.operator)}">✕</span>` : ''}</td>
       </tr>
     `).join('');
     $('ledger-body').querySelectorAll('[data-ledger-del]').forEach(btn=>{
@@ -1852,10 +1885,10 @@ const T = {
   // ---------------- STATS ----------------
   function renderStats(){
     const cutoff = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
-    const scoped = isSupervisorMode ? allEntries : allEntries.filter(e => e.operator === currentOperator);
+    const scoped = canSeeAllData() ? allEntries : allEntries.filter(e => e.operator === currentOperator);
     const recent = scoped.filter(e => e.date >= cutoff);
-    $('stats-by-operator-title').textContent = isSupervisorMode ? t('各操作手完成桩数（近 30 天）') : t('我的完成桩数（近 30 天）');
-    $('stats-by-rig-title').textContent = isSupervisorMode ? t('各钻机停机时长统计（近 30 天）') : t('我使用钻机的停机时长（近 30 天）');
+    $('stats-by-operator-title').textContent = canSeeAllData() ? t('各操作手完成桩数（近 30 天）') : t('我的完成桩数（近 30 天）');
+    $('stats-by-rig-title').textContent = canSeeAllData() ? t('各钻机停机时长统计（近 30 天）') : t('我使用钻机的停机时长（近 30 天）');
     const totalPiles = recent.length;
     const totalFootage = recent.reduce((s,e)=>s+(e.actualDepth||0),0);
     const totalConcrete = recent.reduce((s,e)=>s+(e.concrete||0),0);
@@ -2219,6 +2252,8 @@ const T = {
           <div class="order-meta">${t('报修人')}：${escapeHtml(o.reported_by)} · ${new Date(o.reported_at).toLocaleString(localeTag)} · ${t(o.fault_type||'')} · ${t(o.repair_location||'现场维修')} ${o.urgency==='紧急' ? `<span class="urgency-badge">${t('紧急')}</span>` : ''}</div>
           <div class="order-desc">${escapeHtml(o.fault_desc)}</div>
           ${parts.length>0 ? `<div class="parts-list">${parts.map(p=>`<div class="part-row"><span>${escapeHtml(p.item_name)}</span><span>×${p.quantity_used}</span></div>`).join('')}</div>` : ''}
+          ${o.remarks && !canManageRepairs() ? `<div class="order-desc" style="color:var(--text-dim);">${t('维修备注：')}${escapeHtml(o.remarks)}</div>` : ''}
+          ${canManageRepairs() ? `
           <div class="order-actions">
             <select data-status-select="${o.id}">
               <option value="待处理" ${o.status==='待处理'?'selected':''}>${t('待处理')}</option>
@@ -2244,6 +2279,7 @@ const T = {
           <div class="row-actions" style="margin-top:8px;">
             <button class="btn-ghost" style="width:auto; margin-top:0;" data-remarks-save="${o.id}">${t('保存备注')}</button>
           </div>
+          ` : ''}
         </div>
       `;
     }).join('');
