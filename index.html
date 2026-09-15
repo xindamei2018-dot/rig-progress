@@ -255,6 +255,14 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
 .daily-chart-bar{ width:100%; background:linear-gradient(180deg, var(--amber), var(--amber-dim)); border-radius:2px 2px 0 0; }
 .daily-chart-date{ font-size:10px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; white-space:nowrap; }
 
+/* AI reports */
+.report-history-item{
+  background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius);
+  padding:12px 14px; margin-bottom:8px; cursor:pointer;
+}
+.report-history-item:hover{ border-color:var(--amber); }
+.report-history-meta{ font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+
 /* badges */
 .badges-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:16px; }
 .badge-card{ background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:16px; text-align:center; }
@@ -619,6 +627,16 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
 
     <!-- ---- STATS VIEW ---- -->
     <div class="view" id="view-stats">
+      <div class="panel" id="ai-report-panel" style="display:none;">
+        <div class="panel-title">AI 施工周报/月报</div>
+        <div class="row-actions" style="justify-content:flex-start; gap:12px; margin-top:0;">
+          <button class="btn-ghost" style="width:auto; margin-top:0;" id="ai-report-week-btn">生成近7天周报</button>
+          <button class="btn-ghost" style="width:auto; margin-top:0;" id="ai-report-month-btn">生成近30天月报</button>
+        </div>
+        <div id="ai-report-status" style="display:none; margin-top:14px; font-size:13px; color:var(--text-dim); font-family:'JetBrains Mono',monospace;"></div>
+        <div id="ai-report-result" style="display:none; margin-top:16px; background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); padding:16px; font-size:13px; line-height:1.7; white-space:pre-wrap;"></div>
+        <div id="ai-report-history" style="margin-top:20px;"></div>
+      </div>
       <div class="panel" id="target-panel">
         <div class="panel-title">施工目标</div>
         <div id="target-progress"></div>
@@ -1078,6 +1096,11 @@ const T = {
   "施工目标已保存": "Target saved",
   "管理员邀请码不正确，请向系统管理员核实": "Invalid manager invite code, please check with your admin",
   "查看模式密码不正确": "Incorrect viewer mode password",
+  "历史报告": "Report History",
+  "正在生成报告…": "Generating report…",
+  "生成失败：": "Generation failed: ",
+  "近30天": "Last 30 Days",
+  "近7天": "Last 7 Days",
 };
 
   const LANG_STORAGE_KEY = 'rig_lang_v1';
@@ -1291,6 +1314,57 @@ const T = {
     if(error) throw error;
   }
 
+  // ---------------- AI REPORTS ----------------
+  let allReports = [];
+  async function loadReports(){
+    const { data, error } = await sb.from('ai_reports').select('*').order('created_at', {ascending:false}).limit(10);
+    if(error) throw error;
+    allReports = data || [];
+  }
+  async function addReportRow(row){
+    const { error } = await sb.from('ai_reports').insert(row);
+    if(error) throw error;
+  }
+  async function callDeepSeekReport(summary, periodLabel, lang){
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/generate-report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ summary, periodLabel, lang })
+    });
+    const data = await resp.json();
+    if(!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+    return data.report;
+  }
+  function buildReportSummary(days){
+    const cutoff = new Date(Date.now() - days*86400000).toISOString().slice(0,10);
+    const rigRows = allEntries.filter(e => e.date >= cutoff);
+    const mixRows = allMixingEntries.filter(e => e.date >= cutoff);
+    const attRows = allAttendance.filter(a => a.date >= cutoff);
+    const orderRows = allOrders.filter(o => new Date(o.reported_at).toISOString().slice(0,10) >= cutoff);
+    const lowStock = allInventory.filter(i => i.min_stock > 0 && i.quantity <= i.min_stock).map(i => `${i.name}(${i.quantity}${i.unit||''})`);
+    return {
+      rig_piles_completed: rigRows.length,
+      rig_total_footage_m: Math.round(rigRows.reduce((s,e)=>s+(e.actualDepth||0),0)*10)/10,
+      rig_total_concrete_m3: Math.round(rigRows.reduce((s,e)=>s+(e.concrete||0),0)*10)/10,
+      rig_downtime_hours: Math.round(rigRows.reduce((s,e)=>s+(e.downtimeHrs||0),0)*10)/10,
+      mixing_piles_completed: mixRows.length,
+      mixing_total_footage_m: Math.round(mixRows.reduce((s,e)=>s+(e.actualDepth||0),0)*10)/10,
+      attendance_records: attRows.length,
+      unique_staff_clocked_in: Array.from(new Set(attRows.map(a=>a.operator))).length,
+      repair_orders_reported: orderRows.length,
+      repair_orders_pending: orderRows.filter(o=>o.status==='待处理').length,
+      repair_orders_in_progress: orderRows.filter(o=>o.status==='维修中').length,
+      repair_orders_completed: orderRows.filter(o=>o.status==='已完成').length,
+      low_stock_items: lowStock,
+      target_piles: currentTarget?.target_piles || null,
+      target_footage_m: currentTarget?.target_footage || null
+    };
+  }
+
   // ---------------- ATTENDANCE HELPERS ----------------
   async function loadAttendance(){
     const cutoff = new Date(Date.now() - 45*86400000).toISOString().slice(0,10);
@@ -1460,7 +1534,7 @@ const T = {
       await loadPartsUsed();
       await loadInventory();
       await loadTarget();
-      if(isSupervisorMode) await loadFullRoster();
+      if(isSupervisorMode){ await loadFullRoster(); await loadReports(); }
       renderTodayEntries();
       renderLedger();
       renderStats();
@@ -1522,6 +1596,8 @@ const T = {
     if(invAddPanel) invAddPanel.style.display = isSupervisorMode ? 'block' : 'none';
     const invReadonlyNote = $('inv-readonly-note');
     if(invReadonlyNote) invReadonlyNote.style.display = isSupervisorMode ? 'none' : 'block';
+    const aiReportPanel = $('ai-report-panel');
+    if(aiReportPanel) aiReportPanel.style.display = isSupervisorMode ? 'block' : 'none';
 
     if(isSupervisorMode || isReadOnlyManager) switchView('ledger');
     else if(isMaintenance) switchView('repair-manage');
@@ -1917,6 +1993,57 @@ const T = {
     renderBarList('stats-by-rig', groupSum(recent,'rig','downtimeHrs'), 'h');
     renderTargetPanel(totalPiles, totalFootage);
     renderDailyChart(scoped);
+    if(isSupervisorMode) renderReportHistory();
+  }
+
+  // ---------------- AI REPORT UI ----------------
+  async function runGenerateReport(days, periodLabel){
+    const statusEl = $('ai-report-status');
+    const resultEl = $('ai-report-result');
+    const weekBtn = $('ai-report-week-btn');
+    const monthBtn = $('ai-report-month-btn');
+    weekBtn.disabled = true; monthBtn.disabled = true;
+    statusEl.style.display = 'block';
+    statusEl.textContent = t('正在生成报告…');
+    resultEl.style.display = 'none';
+    try{
+      const summary = buildReportSummary(days);
+      const report = await callDeepSeekReport(summary, periodLabel, currentLang);
+      resultEl.textContent = report;
+      resultEl.style.display = 'block';
+      statusEl.style.display = 'none';
+      await addReportRow({ period_label: periodLabel, lang: currentLang, report_text: report, created_by: currentOperator });
+      await loadReports();
+      renderReportHistory();
+    }catch(e){
+      console.error(e);
+      statusEl.textContent = t('生成失败：') + (e.message||'');
+    }
+    weekBtn.disabled = false; monthBtn.disabled = false;
+  }
+  const aiReportWeekBtn = $('ai-report-week-btn');
+  if(aiReportWeekBtn) aiReportWeekBtn.addEventListener('click', ()=> runGenerateReport(7, t('近7天')));
+  const aiReportMonthBtn = $('ai-report-month-btn');
+  if(aiReportMonthBtn) aiReportMonthBtn.addEventListener('click', ()=> runGenerateReport(30, t('近30天')));
+
+  function renderReportHistory(){
+    const wrap = $('ai-report-history');
+    if(!wrap) return;
+    if(allReports.length===0){ wrap.innerHTML = ''; return; }
+    const localeTag = currentLang === 'en' ? 'en-US' : 'zh-CN';
+    wrap.innerHTML = `<div class="panel-title" style="font-size:12px; margin-bottom:10px;">${t('历史报告')}</div>` + allReports.map((r,idx) => `
+      <div class="report-history-item" data-report-idx="${idx}">
+        <div class="report-history-meta">${escapeHtml(r.period_label)} · ${new Date(r.created_at).toLocaleString(localeTag)} · ${escapeHtml(r.created_by||'')}</div>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-report-idx]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const r = allReports[el.dataset.reportIdx];
+        $('ai-report-result').textContent = r.report_text;
+        $('ai-report-result').style.display = 'block';
+        $('ai-report-status').style.display = 'none';
+      });
+    });
   }
 
   // ---------------- CONSTRUCTION TARGET PANEL ----------------
