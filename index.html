@@ -329,6 +329,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       <select id="login-role">
         <option value="操作手">操作手（旋挖钻机）</option>
         <option value="操作手（双轴搅拌）">操作手（双轴搅拌）</option>
+        <option value="操作手（履带吊车）">操作手（履带吊车）</option>
         <option value="维修人员">维修人员（车间/仓库）</option>
         <option value="只读管理员">只读管理员（仅查看，不可修改）</option>
       </select>
@@ -371,10 +372,12 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   <div class="tabs">
     <div class="tab active" data-view="entry">今日填报</div>
     <div class="tab" data-view="mixing-entry">搅拌填报</div>
+    <div class="tab" data-view="crane-entry">吊车填报</div>
     <div class="tab" data-view="attendance">考勤打卡</div>
     <div class="tab" data-view="repair-report">报修</div>
     <div class="tab" data-view="ledger">旋挖台账</div>
     <div class="tab" data-view="mixing-ledger">搅拌台账</div>
+    <div class="tab" data-view="crane-ledger">吊车台账</div>
     <div class="tab" data-view="stats">统计看板</div>
     <div class="tab" data-view="attendance-overview">考勤总览</div>
     <div class="tab" data-view="repair-manage">维修管理</div>
@@ -489,6 +492,56 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       <div class="today-list">
         <div class="panel-title" style="margin-bottom:12px;">我今日已提交记录</div>
         <div id="m-today-entries"></div>
+      </div>
+    </div>
+
+    <!-- ---- CRANE ENTRY VIEW (履带吊车操作手) ---- -->
+    <div class="view" id="view-crane-entry">
+      <div class="panel">
+        <div class="panel-title">新增吊车作业记录</div>
+        <div class="grid">
+          <div class="field"><label>日期</label><input type="date" id="c-date"></div>
+          <div class="field"><label>吊车编号</label><input type="text" id="c-crane-no" placeholder="如 CR-01" class="mono"></div>
+          <div class="field"><label>作业类型</label>
+            <select id="c-task-type">
+              <option value="钢筋笼吊装">钢筋笼吊装</option>
+              <option value="设备吊运">设备吊运</option>
+              <option value="材料转运">材料转运</option>
+              <option value="吸顶安装/拆卸">吸顶安装/拆卸</option>
+              <option value="内部调机">内部调机</option>
+              <option value="其他">其他（备注说明）</option>
+            </select>
+          </div>
+          <div class="field"><label>作业区域</label><input type="text" id="c-work-area" placeholder="如 B区桩位" class="mono"></div>
+          <div class="field"><label>吊装重量 (t)</label><input type="number" step="0.1" id="c-load-weight" class="mono"></div>
+          <div class="field"><label>吊装半径 (m)</label><input type="number" step="0.1" id="c-lift-radius" class="mono"></div>
+          <div class="field"><label>开始时间</label><input type="time" id="c-start-time"></div>
+          <div class="field"><label>结束时间</label><input type="time" id="c-end-time"></div>
+          <div class="field"><label>停机时长 (h)</label><input type="number" step="0.1" id="c-downtime-hrs" class="mono" value="0"></div>
+          <div class="field"><label>停机原因</label>
+            <select id="c-downtime-reason">
+              <option value="无">无</option>
+              <option value="设备故障">设备故障</option>
+              <option value="等图纸/桩位">等图纸/桩位</option>
+              <option value="等材料">等材料</option>
+              <option value="恶劣天气">恶劣天气</option>
+              <option value="地下障碍物">地下障碍物</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>备注</label>
+          <input type="text" id="c-remarks" placeholder="超载风险、协调事项、异常情况等">
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm" id="c-submit-btn" style="max-width:220px;">提交本条记录</button>
+        </div>
+      </div>
+
+      <div class="today-list">
+        <div class="panel-title" style="margin-bottom:12px;">我今日已提交记录</div>
+        <div id="c-today-entries"></div>
       </div>
     </div>
 
@@ -621,6 +674,35 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
         <div id="m-ledger-empty" class="empty-state" style="display:none;">
           <div class="big">暂无符合条件的记录</div>
           <div>调整筛选条件，或前往「搅拌填报」新增数据</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- CRANE LEDGER VIEW ---- -->
+    <div class="view" id="view-crane-ledger">
+      <div class="panel">
+        <div class="filters">
+          <div class="field"><label>起始日期</label><input type="date" id="c-flt-start"></div>
+          <div class="field"><label>结束日期</label><input type="date" id="c-flt-end"></div>
+          <div class="field" id="c-flt-operator-wrap"><label>操作手</label><select id="c-flt-operator"><option value="">全部</option></select></div>
+          <div class="field"><label>吊车编号</label><input type="text" id="c-flt-crane" placeholder="全部" class="mono"></div>
+        </div>
+        <div class="row-actions" style="margin-top:0; margin-bottom:14px; justify-content:space-between;">
+          <div id="c-ledger-count" class="mono" style="font-size:12px; color:var(--text-dim); align-self:center;"></div>
+          <button class="btn-ghost" style="width:auto; margin-top:0;" id="c-export-csv-btn">导出 CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>日期</th><th>操作手</th><th>吊车</th><th>作业类型</th><th>区域</th><th>吊重(t)</th>
+              <th>半径(m)</th><th>用时</th><th>停机</th><th>备注</th><th></th>
+            </tr></thead>
+            <tbody id="c-ledger-body"></tbody>
+          </table>
+        </div>
+        <div id="c-ledger-empty" class="empty-state" style="display:none;">
+          <div class="big">暂无符合条件的记录</div>
+          <div>调整筛选条件，或前往「吊车填报」新增数据</div>
         </div>
       </div>
     </div>
@@ -792,6 +874,7 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
   let isSupervisorMode = false;
   let allEntries = [];
   let allMixingEntries = [];
+  let allCraneEntries = [];
   let allAttendance = [];
   let allOrders = [];
   let allPartsUsed = [];
@@ -1101,6 +1184,44 @@ const T = {
   "生成失败：": "Generation failed: ",
   "近30天": "Last 30 Days",
   "近7天": "Last 7 Days",
+  "吊车台账_": "Crane_Ledger_",
+  "已提交并同步至云端 · 吊车 ": "Submitted and synced to the cloud · Crane ",
+  "提交中…": "Submitting…",
+  "请填写吊车编号": "Please enter the crane number",
+  "AI 施工周报/月报": "AI Weekly/Monthly Report",
+  "作业区域": "Work Area",
+  "作业类型": "Task Type",
+  "保存目标": "Save Target",
+  "内部调机": "Internal Repositioning",
+  "区域": "Area",
+  "半径(m)": "Radius (m)",
+  "吊装半径 (m)": "Lift Radius (m)",
+  "吊装重量 (t)": "Load Weight (t)",
+  "吊车": "Crane",
+  "吊车台账": "Crane Ledger",
+  "吊车填报": "Crane Entry",
+  "吊车编号": "Crane No.",
+  "吊重(t)": "Load (t)",
+  "吸顶安装/拆卸": "Ceiling Install/Removal",
+  "周期名称": "Period Name",
+  "开始时间": "Start Time",
+  "搅拌机": "Mixer",
+  "操作手（履带吊车）": "Operator (Crawler Crane)",
+  "新增吊车作业记录": "New Crane Work Record",
+  "施工目标": "Construction Target",
+  "材料转运": "Material Transfer",
+  "查看模式密码（仅管理员本人使用）": "Viewer Mode Password (admin only)",
+  "生成近30天月报": "Generate 30-Day Report",
+  "生成近7天周报": "Generate 7-Day Report",
+  "目标桩数": "Target Pile Count",
+  "目标进尺 (m)": "Target Footage (m)",
+  "管理员邀请码": "Manager Invite Code",
+  "结束时间": "End Time",
+  "设备吊运": "Equipment Lifting",
+  "调整筛选条件，或前往「吊车填报」新增数据": "Adjust the filters, or go to \"Crane Entry\" to add data",
+  "近14天每日完成桩数": "Daily Piles Completed (Last 14 Days)",
+  "钢筋笼吊装": "Rebar Cage Lifting",
+  "钻机": "Rig",
 };
 
   const LANG_STORAGE_KEY = 'rig_lang_v1';
@@ -1242,6 +1363,40 @@ const T = {
     const { error } = await sb.from('mixing_entries').delete().eq('id', id);
     if(error) throw error;
   }
+
+  // ---------------- CRANE DB MAPPING & HELPERS ----------------
+  function fromCraneRow(r){
+    return {
+      id: r.id, date: r.date, operator: r.operator, craneNo: r.crane_no, taskType: r.task_type,
+      workArea: r.work_area, loadWeight: r.load_weight_t, liftRadius: r.lift_radius_m,
+      startTime: r.start_time, endTime: r.end_time,
+      downtimeHrs: r.downtime_hrs, downtimeReason: r.downtime_reason,
+      remarks: r.remarks, submittedAt: r.submitted_at
+    };
+  }
+  function toCraneRow(e){
+    return {
+      date: e.date, operator: e.operator, crane_no: e.craneNo, task_type: e.taskType,
+      work_area: e.workArea, load_weight_t: e.loadWeight, lift_radius_m: e.liftRadius,
+      start_time: e.startTime, end_time: e.endTime,
+      downtime_hrs: e.downtimeHrs, downtime_reason: e.downtimeReason,
+      remarks: e.remarks, submitted_at: e.submittedAt
+    };
+  }
+  async function loadCraneEntries(){
+    const { data, error } = await sb.from('crane_entries').select('*').order('date', {ascending:false});
+    if(error) throw error;
+    allCraneEntries = (data||[]).map(fromCraneRow);
+  }
+  async function addCraneEntryRow(entry){
+    const { error } = await sb.from('crane_entries').insert(toCraneRow(entry));
+    if(error) throw error;
+  }
+  async function removeCraneEntryRow(id){
+    const { error } = await sb.from('crane_entries').delete().eq('id', id);
+    if(error) throw error;
+  }
+
   async function findRosterUser(name){
     const { data, error } = await sb.from('roster').select('*').eq('name', name).maybeSingle();
     if(error) throw error;
@@ -1529,6 +1684,7 @@ const T = {
     try{
       await loadEntries();
       await loadMixingEntries();
+      await loadCraneEntries();
       await loadAttendance();
       await loadOrders();
       await loadPartsUsed();
@@ -1541,6 +1697,8 @@ const T = {
       checkBackupReminder();
       if(document.getElementById('view-mixing-entry').classList.contains('active')) renderTodayMixingEntries();
       if(document.getElementById('view-mixing-ledger').classList.contains('active')) renderMixingLedger();
+      if(document.getElementById('view-crane-entry').classList.contains('active')) renderTodayCraneEntries();
+      if(document.getElementById('view-crane-ledger').classList.contains('active')) renderCraneLedger();
       if(document.getElementById('view-attendance').classList.contains('active')) renderAttendanceCards();
       if(document.getElementById('view-attendance-overview').classList.contains('active')) renderAttendanceOverview();
       if(document.getElementById('view-repair-report').classList.contains('active')) renderMyOrders();
@@ -1570,20 +1728,24 @@ const T = {
     $('op-name-chip').textContent = currentOperator + (isSupervisorMode ? '（查看模式）' : ('（' + currentRole + '）'));
     $('f-date').value = todayISO();
     $('m-date').value = todayISO();
+    $('c-date').value = todayISO();
     $('att-date').value = todayISO();
 
     const isOperator = !isSupervisorMode && currentRole === '操作手';
     const isMixingOperator = !isSupervisorMode && currentRole === '操作手（双轴搅拌）';
+    const isCraneOperator = !isSupervisorMode && currentRole === '操作手（履带吊车）';
     const isMaintenance = !isSupervisorMode && currentRole === '维修人员';
     const isReadOnlyManager = !isSupervisorMode && currentRole === '只读管理员';
 
     setTabVisible('entry', isOperator);
     setTabVisible('mixing-entry', isMixingOperator);
-    setTabVisible('repair-report', isOperator || isMixingOperator || isMaintenance || isSupervisorMode);
+    setTabVisible('crane-entry', isCraneOperator);
+    setTabVisible('repair-report', isOperator || isMixingOperator || isCraneOperator || isMaintenance || isSupervisorMode);
     setTabVisible('ledger', isOperator || isSupervisorMode || isReadOnlyManager);
     setTabVisible('mixing-ledger', isMixingOperator || isSupervisorMode || isReadOnlyManager);
+    setTabVisible('crane-ledger', isCraneOperator || isSupervisorMode || isReadOnlyManager);
     setTabVisible('stats', isOperator || isSupervisorMode || isReadOnlyManager);
-    setTabVisible('attendance', isOperator || isMixingOperator || isMaintenance);
+    setTabVisible('attendance', isOperator || isMixingOperator || isCraneOperator || isMaintenance);
     setTabVisible('attendance-overview', isSupervisorMode || isReadOnlyManager);
     setTabVisible('repair-manage', isMaintenance || isSupervisorMode || isReadOnlyManager);
     setTabVisible('inventory', isMaintenance || isSupervisorMode || isReadOnlyManager);
@@ -1602,6 +1764,7 @@ const T = {
     if(isSupervisorMode || isReadOnlyManager) switchView('ledger');
     else if(isMaintenance) switchView('repair-manage');
     else if(isMixingOperator) switchView('mixing-entry');
+    else if(isCraneOperator) switchView('crane-entry');
     else switchView('entry');
 
     await refreshAll();
@@ -1620,6 +1783,8 @@ const T = {
     if(view==='ledger'){ renderLedger(); checkBackupReminder(); }
     if(view==='mixing-ledger') renderMixingLedger();
     if(view==='mixing-entry') renderTodayMixingEntries();
+    if(view==='crane-ledger') renderCraneLedger();
+    if(view==='crane-entry') renderTodayCraneEntries();
     if(view==='stats') renderStats();
     if(view==='attendance') renderAttendanceCards();
     if(view==='attendance-overview') renderAttendanceOverview();
@@ -1852,6 +2017,154 @@ const T = {
     URL.revokeObjectURL(url);
   }
   $('m-export-csv-btn').addEventListener('click', ()=> doExportMixingCsv(getFilteredMixingEntries()));
+
+  // ---------------- CRANE ENTRY (履带吊车操作手) ----------------
+  $('c-submit-btn').addEventListener('click', async () => {
+    const date = $('c-date').value;
+    const craneNo = $('c-crane-no').value.trim();
+    if(!date){ showToast(t('请选择日期'), true); return; }
+    if(!craneNo){ showToast(t('请填写吊车编号'), true); return; }
+
+    const entry = {
+      date, operator: currentOperator, craneNo,
+      taskType: $('c-task-type').value,
+      workArea: $('c-work-area').value.trim(),
+      loadWeight: parseFloat($('c-load-weight').value) || null,
+      liftRadius: parseFloat($('c-lift-radius').value) || null,
+      startTime: $('c-start-time').value, endTime: $('c-end-time').value,
+      downtimeHrs: parseFloat($('c-downtime-hrs').value) || 0,
+      downtimeReason: $('c-downtime-reason').value,
+      remarks: $('c-remarks').value.trim(),
+      submittedAt: Date.now()
+    };
+
+    const btn = $('c-submit-btn');
+    btn.disabled = true; btn.textContent = t('提交中…');
+    try{
+      await addCraneEntryRow(entry);
+      showToast(t('已提交并同步至云端 · 吊车 ') + craneNo);
+      ['c-work-area','c-load-weight','c-lift-radius','c-start-time','c-end-time','c-remarks'].forEach(id=>$(id).value='');
+      $('c-downtime-hrs').value = '0';
+      await refreshAll();
+    }catch(e){
+      console.error(e);
+      showToast(t('提交失败，请检查网络后重试'), true);
+    }
+    btn.disabled = false; btn.textContent = t('提交本条记录');
+  });
+
+  function renderTodayCraneEntries(){
+    const wrap = $('c-today-entries');
+    if(!wrap) return;
+    const mine = allCraneEntries.filter(e => e.operator===currentOperator && e.date===$('c-date').value)
+                            .sort((a,b)=>(b.submittedAt||0) - (a.submittedAt||0));
+    if(mine.length===0){
+      wrap.innerHTML = `<div class="empty-state"><div class="big">${t('今日尚未提交记录')}</div></div>`;
+      return;
+    }
+    wrap.innerHTML = mine.map(e => `
+      <div class="entry-row" data-id="${e.id}">
+        <div class="entry-left">
+          <span class="entry-pile">${escapeHtml(e.craneNo)}</span>
+          <span class="entry-meta">${t(e.taskType)}</span>
+          <span class="entry-meta">${escapeHtml(e.workArea||'--')}</span>
+          <span class="entry-meta">${e.loadWeight??'--'}t / ${e.liftRadius??'--'}m</span>
+          ${e.downtimeReason!=='无' ? `<span class="tag warn">${t('停机 ')}${e.downtimeHrs}h · ${t(e.downtimeReason)}</span>` : ''}
+        </div>
+        <span class="del-btn" data-cdel="${e.id}">✕</span>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-cdel]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirm(t('确认删除该条记录？'))) return;
+        try{ await removeCraneEntryRow(btn.dataset.cdel); await refreshAll(); showToast(t('已删除')); }
+        catch(e){ showToast(t('删除失败，请重试'), true); }
+      });
+    });
+  }
+  $('c-date').addEventListener('change', renderTodayCraneEntries);
+
+  // ---------------- CRANE LEDGER ----------------
+  function populateCraneOperatorFilter(){
+    const sel = $('c-flt-operator');
+    if(!canSeeAllData()){
+      sel.innerHTML = `<option value="${escapeHtml(currentOperator)}">${escapeHtml(currentOperator)}（${t('仅本人')}）</option>`;
+      sel.value = currentOperator;
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    const ops = Array.from(new Set(allCraneEntries.map(e=>e.operator))).sort();
+    const current = sel.value;
+    sel.innerHTML = `<option value="">${t('全部')}</option>` + ops.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+    sel.value = current;
+  }
+
+  function getFilteredCraneEntries(){
+    const start = $('c-flt-start').value, end = $('c-flt-end').value;
+    const op = canSeeAllData() ? $('c-flt-operator').value : currentOperator;
+    const crane = $('c-flt-crane').value.trim().toLowerCase();
+    return allCraneEntries.filter(e=>{
+      if(!canSeeAllData() && e.operator !== currentOperator) return false;
+      if(start && e.date < start) return false;
+      if(end && e.date > end) return false;
+      if(op && e.operator !== op) return false;
+      if(crane && !(e.craneNo||'').toLowerCase().includes(crane)) return false;
+      return true;
+    }).sort((a,b)=> b.date.localeCompare(a.date) || (b.submittedAt||0) - (a.submittedAt||0));
+  }
+
+  function renderCraneLedger(){
+    if(!$('c-ledger-body')) return;
+    populateCraneOperatorFilter();
+    const rows = getFilteredCraneEntries();
+    $('c-ledger-count').textContent = rows.length + ' ' + t('条记录');
+    $('c-ledger-empty').style.display = rows.length===0 ? 'block' : 'none';
+    $('c-ledger-body').innerHTML = rows.map(e => `
+      <tr>
+        <td>${e.date}</td>
+        <td>${escapeHtml(e.operator)}</td>
+        <td>${escapeHtml(e.craneNo)}</td>
+        <td>${t(e.taskType)}</td>
+        <td>${escapeHtml(e.workArea)||'--'}</td>
+        <td>${e.loadWeight??'--'}</td>
+        <td>${e.liftRadius??'--'}</td>
+        <td>${e.startTime||'--'}–${e.endTime||'--'}</td>
+        <td>${e.downtimeReason==='无' ? '—' : `<span class="tag warn">${e.downtimeHrs}h ${t(e.downtimeReason)}</span>`}</td>
+        <td style="font-family:'Inter',sans-serif; max-width:160px; white-space:normal;">${escapeHtml(e.remarks)||'—'}</td>
+        <td>${(!canSeeAllData() && e.operator===currentOperator) || isSupervisorMode ? `<span class="del-btn" data-c-ledger-del="${e.id}" data-c-ledger-del-owner="${escapeHtml(e.operator)}">✕</span>` : ''}</td>
+      </tr>
+    `).join('');
+    $('c-ledger-body').querySelectorAll('[data-c-ledger-del]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const owner = btn.dataset.cLedgerDelOwner;
+        const msg = (isSupervisorMode && owner !== currentOperator)
+          ? t('确认要删除操作手「') + owner + t('」提交的这条记录吗？此操作不可恢复。')
+          : t('确认删除该条记录？');
+        if(!confirm(msg)) return;
+        try{ await removeCraneEntryRow(btn.dataset.cLedgerDel); await refreshAll(); showToast(t('已删除')); }
+        catch(e){ showToast(t('删除失败，请重试'), true); }
+      });
+    });
+  }
+  ['c-flt-start','c-flt-end','c-flt-operator','c-flt-crane'].forEach(id=>{
+    $(id).addEventListener('input', renderCraneLedger);
+    $(id).addEventListener('change', renderCraneLedger);
+  });
+
+  async function doExportCraneCsv(rows){
+    if(rows.length===0){ showToast(t('没有可导出的数据'), true); return; }
+    const headers = ['日期','操作手','吊车','作业类型','区域','吊重t','半径m','开始','结束','停机h','停机原因','备注'];
+    const csvRows = rows.map(e => [e.date,e.operator,e.craneNo,e.taskType,e.workArea,e.loadWeight,e.liftRadius,e.startTime,e.endTime,e.downtimeHrs,e.downtimeReason,(e.remarks||'').replace(/,/g,'、')].join(','));
+    const csv = '\uFEFF' + [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = t('吊车台账_') + todayISO() + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  $('c-export-csv-btn').addEventListener('click', ()=> doExportCraneCsv(getFilteredCraneEntries()));
 
   // ---------------- LEDGER ----------------
   function populateOperatorFilter(){
