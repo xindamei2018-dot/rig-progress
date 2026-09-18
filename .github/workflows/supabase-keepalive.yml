@@ -1,0 +1,25 @@
+name: Supabase Keep-Alive
+
+# 每 3 天访问一次 Supabase，防止免费版因为"连续一周无活动"被自动暂停。
+# 可以在 GitHub 仓库的 Actions 标签页手动点 "Run workflow" 立即测试一次。
+
+on:
+  schedule:
+    - cron: '0 3 */3 * *'   # 每 3 天的 UTC 3:00 跑一次
+  workflow_dispatch: {}     # 允许手动触发，方便测试
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase (读一条 roster 记录，产生真实的数据库活动)
+        run: |
+          STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            "https://mjngzxuvejejxdsqqopk.supabase.co/rest/v1/roster?select=name&limit=1" \
+            -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qbmd6eHV2ZWplanhkc3Fxb3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0Mzc3MjQsImV4cCI6MjEwNDAxMzcyNH0.MWiRCdjbO5uobRGxVOxZD-6QW56_sHZhNoyyrx4TYxg" \
+            -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qbmd6eHV2ZWplanhkc3Fxb3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0Mzc3MjQsImV4cCI6MjEwNDAxMzcyNH0.MWiRCdjbO5uobRGxVOxZD-6QW56_sHZhNoyyrx4TYxg")
+          echo "HTTP status: $STATUS"
+          cat /tmp/response.json
+          if [ "$STATUS" -ge 400 ]; then
+            echo "::warning::Supabase ping returned an error status — the project may be paused or the key may have changed."
+          fi
