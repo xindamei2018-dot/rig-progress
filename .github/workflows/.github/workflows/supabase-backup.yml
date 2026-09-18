@@ -1,0 +1,45 @@
+name: Supabase Data Backup
+
+# 每周把 Supabase 里所有表的数据导出成 JSON 文件，提交进这个仓库的 backups/ 文件夹。
+# 即使 Supabase 项目出问题（暂停/被删/账户异常），这份数据副本仍然留在 GitHub 上。
+# 注意：这个备份只包含数据库表里的数据，不包含考勤打卡照片本身（那些图片存在 Supabase
+# Storage 里，这个工作流只会备份照片的链接地址，不会下载图片文件）。
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'   # 每周日 UTC 18:00（新加坡时间周一凌晨 2 点左右）
+  workflow_dispatch: {}     # 允许手动触发，方便测试
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 导出所有表
+        env:
+          SUPABASE_URL: "https://mjngzxuvejejxdsqqopk.supabase.co"
+          SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qbmd6eHV2ZWplanhkc3Fxb3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0Mzc3MjQsImV4cCI6MjEwNDAxMzcyNH0.MWiRCdjbO5uobRGxVOxZD-6QW56_sHZhNoyyrx4TYxg"
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          mkdir -p "backups/$DATE"
+          # 如果以后新建了别的表，记得把表名加进下面这个列表
+          TABLES="entries mixing_entries crane_entries roster attendance maintenance_orders maintenance_parts_used inventory_items targets backup_meta ai_reports"
+          for TABLE in $TABLES; do
+            echo "导出表：$TABLE"
+            curl -s "$SUPABASE_URL/rest/v1/$TABLE?select=*" \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              -o "backups/$DATE/$TABLE.json"
+          done
+
+      - name: 提交备份文件
+        run: |
+          git config user.name "supabase-backup-bot"
+          git config user.email "supabase-backup-bot@users.noreply.github.com"
+          git add backups/
+          git commit -m "Automated Supabase backup $(date +%Y-%m-%d)" || echo "本次没有新数据变化，跳过提交"
+          git push
