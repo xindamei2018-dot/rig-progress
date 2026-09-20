@@ -1,0 +1,8 @@
+[{"id":"31a3b978-47fc-4582-bc23-b3b709eecd27","name":"波纹管","spec":"D20mm","category":"电气件","unit":"m","quantity":50,"min_stock":0,"location":"A-2","remarks":null,"updated_at":"2026-09-19T01:22:48.93857+00:00"}, 
+ {"id":"c6ac5e55-ff82-4db8-b9ea-5fa375c17efd","name":"波纹管","spec":"D25mm","category":"电气件","unit":"m","quantity":400,"min_stock":0,"location":"A-2","remarks":null,"updated_at":"2026-09-19T01:24:12.06982+00:00"}, 
+ {"id":"f285fc27-263d-4106-b266-630679004245","name":"波纹管","spec":"D32mm","category":"电气件","unit":"m","quantity":25,"min_stock":0,"location":"A-2","remarks":null,"updated_at":"2026-09-19T01:29:44.191596+00:00"}, 
+ {"id":"1c5074c8-5db6-4c39-b9ce-3b76f705c7c0","name":"波纹管","spec":"D50","category":"电气件","unit":"m","quantity":30,"min_stock":0,"location":"A-2","remarks":null,"updated_at":"2026-09-19T01:30:10.356763+00:00"}, 
+ {"id":"18741354-4782-40a8-b19d-777b1fac3013","name":"LED方形照明灯","spec":"200w","category":"电气件","unit":"个","quantity":6,"min_stock":0,"location":"A-2","remarks":null,"updated_at":"2026-09-19T01:31:54.041174+00:00"}, 
+ {"id":"f0ba5686-3042-4aab-980f-42715cf338a5","name":"长方形照明灯管","spec":"二手","category":"电气件","unit":"个","quantity":4,"min_stock":0,"location":"A-2","remarks":null,"updated_at":"2026-09-19T01:34:01.605094+00:00"}, 
+ {"id":"1427a6d0-bc1c-48bd-b654-ce8055f04b00","name":"防护面罩","spec":"打磨防飞溅","category":"其他","unit":"个","quantity":1,"min_stock":0,"location":"A-2","remarks":null,"updated_at":"2026-09-19T01:36:09.587549+00:00"}, 
+ {"id":"70334d8a-5a3d-43b5-aa8a-e333ce53e320","name":"钻斗底板","spec":"20","category":"易损件","unit":"个","quantity":0,"min_stock":0,"location":"","remarks":null,"updated_at":"2026-09-19T01:38:29.058+00:00"}]
