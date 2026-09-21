@@ -744,6 +744,34 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
         <div class="panel-title" id="stats-by-rig-title">各钻机停机时长统计（近 30 天）</div>
         <div id="stats-by-rig"></div>
       </div>
+
+      <div id="stats-fleet-panels" style="display:none;">
+        <div class="panel">
+          <div class="panel-title">搅拌桩统计（近 30 天）</div>
+          <div class="stats-row" id="mixing-stats-cards"></div>
+          <div id="mixing-stats-by-operator"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">吊车统计（近 30 天）</div>
+          <div class="stats-row" id="crane-stats-cards"></div>
+          <div id="crane-stats-by-tasktype"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">考勤统计（近 30 天）</div>
+          <div class="stats-row" id="attendance-stats-cards"></div>
+          <div id="attendance-stats-by-operator"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">维修统计（近 30 天）</div>
+          <div class="stats-row" id="repair-stats-cards"></div>
+          <div id="repair-stats-by-faulttype"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">库存统计</div>
+          <div class="stats-row" id="inventory-stats-cards"></div>
+          <div id="inventory-stats-by-category"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ---- ATTENDANCE OVERVIEW (SUPERVISOR) VIEW ---- -->
@@ -803,6 +831,28 @@ tr:hover td{ background:rgba(232,148,12,0.04); }
       <div class="panel">
         <div class="panel-title">库存清单</div>
         <div class="login-note" id="inv-readonly-note" style="display:none; margin-bottom:12px;">你当前是查看权限，库存数量的增减由领用配件时自动扣减，如需新增备件或修改库存，请联系管理员。</div>
+        <div class="filters">
+          <div class="field"><label>查找配件</label><input type="text" id="inv-search" placeholder="按名称/规格/位置搜索" class="mono"></div>
+          <div class="field"><label>类别筛选</label>
+            <select id="inv-filter-category">
+              <option value="">全部</option>
+              <option value="液压件">液压件</option>
+              <option value="电气件">电气件</option>
+              <option value="钻具配件">钻具配件</option>
+              <option value="易损件">易损件</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="field"><label>库存状态</label>
+            <select id="inv-filter-status">
+              <option value="">全部</option>
+              <option value="low">仅看库存告急</option>
+              <option value="active">仅看在架</option>
+              <option value="inactive">仅看已下架</option>
+            </select>
+          </div>
+        </div>
+        <div id="inv-count" class="mono" style="font-size:12px; color:var(--text-dim); margin-bottom:10px;"></div>
         <div id="inv-list"></div>
       </div>
     </div>
@@ -1229,6 +1279,30 @@ const T = {
   "已重新上架": "Reactivated",
   "操作失败，请重试": "Action failed, please try again",
   "重新上架": "Reactivate",
+  "暂无符合条件的备件": "No matching parts",
+  "仅看在架": "Active only",
+  "仅看已下架": "Deactivated only",
+  "仅看库存告急": "Low stock only",
+  "库存状态": "Stock Status",
+  "查找配件": "Search Parts",
+  "类别筛选": "Filter by Category",
+  "人": " staff",
+  "单": " orders",
+  "参与打卡人数": "Staff Clocked In",
+  "在架备件总数": "Active Parts",
+  "天": " days",
+  "完成作业数": "Tasks Completed",
+  "平均水泥掺量": "Avg. Cement Content",
+  "库存告急数量": "Low Stock Count",
+  "打卡记录数": "Clock-in Records",
+  "报修总数": "Total Reports",
+  "次": " times",
+  "项": " items",
+  "吊车统计（近 30 天）": "Crane Stats (Last 30 Days)",
+  "库存统计": "Inventory Stats",
+  "搅拌桩统计（近 30 天）": "Mixing Pile Stats (Last 30 Days)",
+  "维修统计（近 30 天）": "Maintenance Stats (Last 30 Days)",
+  "考勤统计（近 30 天）": "Attendance Stats (Last 30 Days)",
 };
 
   const LANG_STORAGE_KEY = 'rig_lang_v1';
@@ -2339,6 +2413,93 @@ const T = {
     renderTargetPanel(totalPiles, totalFootage);
     renderDailyChart(scoped);
     if(isSupervisorMode) renderReportHistory();
+
+    const fleetPanels = $('stats-fleet-panels');
+    if(canSeeAllData()){
+      if(fleetPanels) fleetPanels.style.display = 'block';
+      renderMixingStats(cutoff);
+      renderCraneStats(cutoff);
+      renderAttendanceStats(cutoff);
+      renderRepairStats(cutoff);
+      renderInventoryStats();
+    } else {
+      if(fleetPanels) fleetPanels.style.display = 'none';
+    }
+  }
+
+  // ---------------- FLEET-WIDE MODULE STATS (SUPERVISOR / READ-ONLY MANAGER) ----------------
+  function renderMixingStats(cutoff){
+    const recent = allMixingEntries.filter(e => e.date >= cutoff);
+    const totalPiles = recent.length;
+    const totalFootage = recent.reduce((s,e)=>s+(e.actualDepth||0),0);
+    const totalDowntime = recent.reduce((s,e)=>s+(e.downtimeHrs||0),0);
+    const avgCement = recent.length ? (recent.reduce((s,e)=>s+(e.cement||0),0)/recent.length) : 0;
+    $('mixing-stats-cards').innerHTML = `
+      <div class="stat-card"><div class="stat-label">${t('近30天完成桩数')}</div><div class="stat-value">${totalPiles}<span class="stat-unit">${t('根')}</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('累计成孔进尺')}</div><div class="stat-value">${totalFootage.toFixed(1)}<span class="stat-unit">m</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('累计停机时长')}</div><div class="stat-value">${totalDowntime.toFixed(1)}<span class="stat-unit">h</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('平均水泥掺量')}</div><div class="stat-value">${avgCement.toFixed(1)}<span class="stat-unit">%</span></div></div>
+    `;
+    renderBarList('mixing-stats-by-operator', groupCount(recent,'operator'), t('根'));
+  }
+
+  function renderCraneStats(cutoff){
+    const recent = allCraneEntries.filter(e => e.date >= cutoff);
+    const totalTasks = recent.length;
+    const totalDowntime = recent.reduce((s,e)=>s+(e.downtimeHrs||0),0);
+    $('crane-stats-cards').innerHTML = `
+      <div class="stat-card"><div class="stat-label">${t('完成作业数')}</div><div class="stat-value">${totalTasks}<span class="stat-unit">${t('次')}</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('累计停机时长')}</div><div class="stat-value">${totalDowntime.toFixed(1)}<span class="stat-unit">h</span></div></div>
+    `;
+    const byTask = {};
+    recent.forEach(e => { const k = t(e.taskType||t('其他')); byTask[k] = (byTask[k]||0)+1; });
+    renderBarList('crane-stats-by-tasktype', byTask, t('次'));
+  }
+
+  function renderAttendanceStats(cutoff){
+    const recent = allAttendance.filter(a => a.date >= cutoff);
+    const totalRecords = recent.length;
+    const uniqueStaff = Array.from(new Set(recent.map(a=>a.operator))).length;
+    $('attendance-stats-cards').innerHTML = `
+      <div class="stat-card"><div class="stat-label">${t('打卡记录数')}</div><div class="stat-value">${totalRecords}<span class="stat-unit">${t('次')}</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('参与打卡人数')}</div><div class="stat-value">${uniqueStaff}<span class="stat-unit">${t('人')}</span></div></div>
+    `;
+    const byOperator = {};
+    recent.forEach(a => {
+      byOperator[a.operator] = byOperator[a.operator] || new Set();
+      byOperator[a.operator].add(a.date);
+    });
+    const dayCounts = {};
+    Object.entries(byOperator).forEach(([op,set])=>{ dayCounts[op] = set.size; });
+    renderBarList('attendance-stats-by-operator', dayCounts, t('天'));
+  }
+
+  function renderRepairStats(cutoff){
+    const recent = allOrders.filter(o => new Date(o.reported_at).toISOString().slice(0,10) >= cutoff);
+    const pending = recent.filter(o=>o.status==='待处理').length;
+    const inProgress = recent.filter(o=>o.status==='维修中').length;
+    const completed = recent.filter(o=>o.status==='已完成').length;
+    $('repair-stats-cards').innerHTML = `
+      <div class="stat-card"><div class="stat-label">${t('报修总数')}</div><div class="stat-value">${recent.length}<span class="stat-unit">${t('单')}</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('待处理')}</div><div class="stat-value">${pending}<span class="stat-unit">${t('单')}</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('维修中')}</div><div class="stat-value">${inProgress}<span class="stat-unit">${t('单')}</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('已完成')}</div><div class="stat-value">${completed}<span class="stat-unit">${t('单')}</span></div></div>
+    `;
+    const byFault = {};
+    recent.forEach(o => { const k = t(o.fault_type||t('其他')); byFault[k] = (byFault[k]||0)+1; });
+    renderBarList('repair-stats-by-faulttype', byFault, t('单'));
+  }
+
+  function renderInventoryStats(){
+    const activeItems = allInventory.filter(i => i.active !== false);
+    const lowStockCount = activeItems.filter(i => i.min_stock > 0 && i.quantity <= i.min_stock).length;
+    $('inventory-stats-cards').innerHTML = `
+      <div class="stat-card"><div class="stat-label">${t('在架备件总数')}</div><div class="stat-value">${activeItems.length}<span class="stat-unit">${t('项')}</span></div></div>
+      <div class="stat-card"><div class="stat-label">${t('库存告急数量')}</div><div class="stat-value">${lowStockCount}<span class="stat-unit">${t('项')}</span></div></div>
+    `;
+    const byCategory = {};
+    activeItems.forEach(i => { const k = t(i.category||t('其他')); byCategory[k] = (byCategory[k]||0)+1; });
+    renderBarList('inventory-stats-by-category', byCategory, t('项'));
   }
 
   // ---------------- AI REPORT UI ----------------
@@ -2842,14 +3003,42 @@ const T = {
     });
   }
 
+  function getFilteredInventory(){
+    const q = ($('inv-search')?.value || '').trim().toLowerCase();
+    const category = $('inv-filter-category')?.value || '';
+    const status = $('inv-filter-status')?.value || '';
+    return allInventory.filter(i => {
+      const low = i.min_stock > 0 && i.quantity <= i.min_stock;
+      const inactive = i.active === false;
+      if(q){
+        const hay = [i.name, i.spec, i.location].filter(Boolean).join(' ').toLowerCase();
+        if(!hay.includes(q)) return false;
+      }
+      if(category && i.category !== category) return false;
+      if(status === 'low' && !low) return false;
+      if(status === 'active' && inactive) return false;
+      if(status === 'inactive' && !inactive) return false;
+      return true;
+    });
+  }
+
   function renderInventory(){
     const wrap = $('inv-list');
     if(!wrap) return;
     if(allInventory.length===0){
+      $('inv-count').textContent = '';
       wrap.innerHTML = `<div class="empty-state"><div class="big">${t('还没有备件记录')}</div></div>`;
       return;
     }
-    wrap.innerHTML = allInventory.map(i => {
+    const rows = getFilteredInventory();
+    $('inv-count').textContent = currentLang === 'en'
+      ? `${rows.length} / ${allInventory.length} items`
+      : `${rows.length} 条记录 / 共 ${allInventory.length} 条`;
+    if(rows.length===0){
+      wrap.innerHTML = `<div class="empty-state"><div class="big">${t('暂无符合条件的备件')}</div></div>`;
+      return;
+    }
+    wrap.innerHTML = rows.map(i => {
       const low = i.min_stock > 0 && i.quantity <= i.min_stock;
       const inactive = i.active === false;
       return `
@@ -2873,6 +3062,13 @@ const T = {
       });
     });
   }
+  ['inv-search','inv-filter-category','inv-filter-status'].forEach(id=>{
+    const el = $(id);
+    if(el){
+      el.addEventListener('input', renderInventory);
+      el.addEventListener('change', renderInventory);
+    }
+  });
 
   // ---------------- BADGES (QR LOGIN CARDS) ----------------
   function renderBadges(){
