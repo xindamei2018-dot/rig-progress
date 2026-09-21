@@ -1224,6 +1224,11 @@ const T = {
   "钻机": "Rig",
   "确认要删除备件「": "Delete the part \"",
   "」吗？此操作不可恢复。": "\"? This cannot be undone.",
+  "下架": "Deactivate",
+  "已下架": "Deactivated",
+  "已重新上架": "Reactivated",
+  "操作失败，请重试": "Action failed, please try again",
+  "重新上架": "Reactivate",
 };
 
   const LANG_STORAGE_KEY = 'rig_lang_v1';
@@ -1458,6 +1463,10 @@ const T = {
     const { error } = await sb.from('inventory_items').delete().eq('id', id);
     if(error) throw error;
   }
+  async function setInventoryActive(id, active){
+    const { error } = await sb.from('inventory_items').update({ active, updated_at: new Date().toISOString() }).eq('id', id);
+    if(error) throw error;
+  }
   async function loadFullRoster(){
     const { data, error } = await sb.from('roster').select('*').order('name', {ascending:true});
     if(error) throw error;
@@ -1504,9 +1513,21 @@ const T = {
     const cutoff = new Date(Date.now() - days*86400000).toISOString().slice(0,10);
     const rigRows = allEntries.filter(e => e.date >= cutoff);
     const mixRows = allMixingEntries.filter(e => e.date >= cutoff);
+    const craneRows = allCraneEntries.filter(e => e.date >= cutoff);
     const attRows = allAttendance.filter(a => a.date >= cutoff);
     const orderRows = allOrders.filter(o => new Date(o.reported_at).toISOString().slice(0,10) >= cutoff);
-    const lowStock = allInventory.filter(i => i.min_stock > 0 && i.quantity <= i.min_stock).map(i => `${i.name}(${i.quantity}${i.unit||''})`);
+    const cutoffTs = Date.now() - days*86400000;
+    const partsUsedRows = allPartsUsed.filter(p => (p.used_at||0) >= cutoffTs);
+
+    const lowStock = allInventory.filter(i => i.active !== false && i.min_stock > 0 && i.quantity <= i.min_stock).map(i => `${i.name}(${i.quantity}${i.unit||''})`);
+    const activeItems = allInventory.filter(i => i.active !== false);
+    const categoryCount = {};
+    activeItems.forEach(i => { const c = i.category || '其他'; categoryCount[c] = (categoryCount[c]||0) + 1; });
+
+    const partsUsageTotals = {};
+    partsUsedRows.forEach(p => { partsUsageTotals[p.item_name] = (partsUsageTotals[p.item_name]||0) + (p.quantity_used||0); });
+    const topPartsUsed = Object.entries(partsUsageTotals).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([name,qty])=>`${name} ×${qty}`);
+
     return {
       rig_piles_completed: rigRows.length,
       rig_total_footage_m: Math.round(rigRows.reduce((s,e)=>s+(e.actualDepth||0),0)*10)/10,
@@ -1514,13 +1535,18 @@ const T = {
       rig_downtime_hours: Math.round(rigRows.reduce((s,e)=>s+(e.downtimeHrs||0),0)*10)/10,
       mixing_piles_completed: mixRows.length,
       mixing_total_footage_m: Math.round(mixRows.reduce((s,e)=>s+(e.actualDepth||0),0)*10)/10,
+      crane_tasks_completed: craneRows.length,
+      crane_downtime_hours: Math.round(craneRows.reduce((s,e)=>s+(e.downtimeHrs||0),0)*10)/10,
       attendance_records: attRows.length,
       unique_staff_clocked_in: Array.from(new Set(attRows.map(a=>a.operator))).length,
       repair_orders_reported: orderRows.length,
       repair_orders_pending: orderRows.filter(o=>o.status==='待处理').length,
       repair_orders_in_progress: orderRows.filter(o=>o.status==='维修中').length,
       repair_orders_completed: orderRows.filter(o=>o.status==='已完成').length,
-      low_stock_items: lowStock,
+      inventory_active_item_count: activeItems.length,
+      inventory_categories: categoryCount,
+      inventory_low_stock_items: lowStock,
+      inventory_top_parts_used_this_period: topPartsUsed,
       target_piles: currentTarget?.target_piles || null,
       target_footage_m: currentTarget?.target_footage || null
     };
@@ -2699,7 +2725,7 @@ const T = {
     wrap.innerHTML = rows.map(o => {
       const parts = partsForOrder(o.id);
       const target = o.type === '设备维保' ? (t('钻机 ') + escapeHtml(o.rig||'')) : (t('钻具 ') + escapeHtml(o.tool_name||''));
-      const invOptions = allInventory.map(i => `<option value="${i.id}">${escapeHtml(i.name)}（${t('库存')}${i.quantity}${escapeHtml(i.unit||'')}）</option>`).join('');
+      const invOptions = allInventory.filter(i => i.active !== false).map(i => `<option value="${i.id}">${escapeHtml(i.name)}（${t('库存')}${i.quantity}${escapeHtml(i.unit||'')}）</option>`).join('');
       const localeTag = currentLang === 'en' ? 'en-US' : 'zh-CN';
       return `
         <div class="order-card ${o.urgency==='紧急'?'urgent':''}" data-order-id="${o.id}">
@@ -2725,7 +2751,7 @@ const T = {
               <option value="送车间维修" ${o.repair_location==='送车间维修'?'selected':''}>${t('送车间维修')}</option>
             </select>
             <button class="ghost" data-location-save="${o.id}">${t('改维修方式')}</button>
-            ${allInventory.length>0 ? `
+            ${invOptions.length>0 ? `
               <select data-part-select="${o.id}">${invOptions}</select>
               <input type="number" min="1" value="1" data-part-qty="${o.id}" style="width:60px;">
               <button class="ghost" data-part-add="${o.id}">${t('领用配件')}</button>
@@ -2825,25 +2851,25 @@ const T = {
     }
     wrap.innerHTML = allInventory.map(i => {
       const low = i.min_stock > 0 && i.quantity <= i.min_stock;
+      const inactive = i.active === false;
       return `
-        <div class="inv-row ${low?'low':''}">
+        <div class="inv-row ${low?'low':''}" style="${inactive?'opacity:0.55;':''}">
           <div>
-            <div class="inv-name">${escapeHtml(i.name)} ${i.spec?`<span class="inv-meta">(${escapeHtml(i.spec)})</span>`:''}</div>
+            <div class="inv-name">${escapeHtml(i.name)} ${i.spec?`<span class="inv-meta">(${escapeHtml(i.spec)})</span>`:''} ${inactive?`<span class="tag warn">${t('已下架')}</span>`:''}</div>
             <div class="inv-meta">${t(i.category||'')} · ${i.location ? escapeHtml(i.location) : t('未标注位置')}</div>
           </div>
           <div style="display:flex; align-items:center; gap:14px;">
             <div class="inv-qty ${low?'low':''}">${i.quantity}${escapeHtml(i.unit||'')}${low?' ⚠'+t('低库存'):''}</div>
-            ${isSupervisorMode ? `<span class="del-btn" data-inv-del="${i.id}" data-inv-del-name="${escapeHtml(i.name)}">✕</span>` : ''}
+            ${isSupervisorMode ? `<button class="btn-ghost" style="width:auto; margin-top:0; padding:5px 12px; font-size:12px;" data-inv-toggle="${i.id}" data-inv-toggle-active="${inactive ? '1':'0'}">${inactive ? t('重新上架') : t('下架')}</button>` : ''}
           </div>
         </div>
       `;
     }).join('');
-    wrap.querySelectorAll('[data-inv-del]').forEach(btn=>{
+    wrap.querySelectorAll('[data-inv-toggle]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
-        const name = btn.dataset.invDelName;
-        if(!confirm(t('确认要删除备件「') + name + t('」吗？此操作不可恢复。'))) return;
-        try{ await removeInventoryItemRow(btn.dataset.invDel); await refreshAll(); showToast(t('已删除')); }
-        catch(e){ showToast(t('删除失败，请重试'), true); }
+        const makeActive = btn.dataset.invToggleActive === '1'; // currently inactive -> button re-activates
+        try{ await setInventoryActive(btn.dataset.invToggle, makeActive); await refreshAll(); showToast(makeActive ? t('已重新上架') : t('已下架')); }
+        catch(e){ showToast(t('操作失败，请重试'), true); }
       });
     });
   }
