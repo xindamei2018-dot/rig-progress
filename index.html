@@ -1222,6 +1222,8 @@ const T = {
   "近14天每日完成桩数": "Daily Piles Completed (Last 14 Days)",
   "钢筋笼吊装": "Rebar Cage Lifting",
   "钻机": "Rig",
+  "确认要删除备件「": "Delete the part \"",
+  "」吗？此操作不可恢复。": "\"? This cannot be undone.",
 };
 
   const LANG_STORAGE_KEY = 'rig_lang_v1';
@@ -1450,6 +1452,10 @@ const T = {
   }
   async function adjustInventoryQty(id, newQty){
     const { error } = await sb.from('inventory_items').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', id);
+    if(error) throw error;
+  }
+  async function removeInventoryItemRow(id){
+    const { error } = await sb.from('inventory_items').delete().eq('id', id);
     if(error) throw error;
   }
   async function loadFullRoster(){
@@ -2825,10 +2831,21 @@ const T = {
             <div class="inv-name">${escapeHtml(i.name)} ${i.spec?`<span class="inv-meta">(${escapeHtml(i.spec)})</span>`:''}</div>
             <div class="inv-meta">${t(i.category||'')} · ${i.location ? escapeHtml(i.location) : t('未标注位置')}</div>
           </div>
-          <div class="inv-qty ${low?'low':''}">${i.quantity}${escapeHtml(i.unit||'')}${low?' ⚠'+t('低库存'):''}</div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div class="inv-qty ${low?'low':''}">${i.quantity}${escapeHtml(i.unit||'')}${low?' ⚠'+t('低库存'):''}</div>
+            ${isSupervisorMode ? `<span class="del-btn" data-inv-del="${i.id}" data-inv-del-name="${escapeHtml(i.name)}">✕</span>` : ''}
+          </div>
         </div>
       `;
     }).join('');
+    wrap.querySelectorAll('[data-inv-del]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const name = btn.dataset.invDelName;
+        if(!confirm(t('确认要删除备件「') + name + t('」吗？此操作不可恢复。'))) return;
+        try{ await removeInventoryItemRow(btn.dataset.invDel); await refreshAll(); showToast(t('已删除')); }
+        catch(e){ showToast(t('删除失败，请重试'), true); }
+      });
+    });
   }
 
   // ---------------- BADGES (QR LOGIN CARDS) ----------------
