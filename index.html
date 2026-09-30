@@ -1286,6 +1286,7 @@ const T = {
   "库存状态": "Stock Status",
   "查找配件": "Search Parts",
   "类别筛选": "Filter by Category",
+  "翻译并新增中…": "Translating & adding…",
   "人": " staff",
   "单": " orders",
   "参与打卡人数": "Staff Clocked In",
@@ -1582,6 +1583,20 @@ const T = {
     const data = await resp.json();
     if(!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
     return data.report;
+  }
+  async function callTranslateFields(texts){
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/translate-fields`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ texts })
+    });
+    const data = await resp.json();
+    if(!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+    return data.translations || {};
   }
   function buildReportSummary(days){
     const cutoff = new Date(Date.now() - days*86400000).toISOString().slice(0,10);
@@ -2886,7 +2901,7 @@ const T = {
     wrap.innerHTML = rows.map(o => {
       const parts = partsForOrder(o.id);
       const target = o.type === '设备维保' ? (t('钻机 ') + escapeHtml(o.rig||'')) : (t('钻具 ') + escapeHtml(o.tool_name||''));
-      const invOptions = allInventory.filter(i => i.active !== false).map(i => `<option value="${i.id}">${escapeHtml(i.name)}（${t('库存')}${i.quantity}${escapeHtml(i.unit||'')}）</option>`).join('');
+      const invOptions = allInventory.filter(i => i.active !== false).map(i => `<option value="${i.id}">${escapeHtml((currentLang === 'en' && i.name_en) ? i.name_en : i.name)}（${t('库存')}${i.quantity}${escapeHtml(i.unit||'')}）</option>`).join('');
       const localeTag = currentLang === 'en' ? 'en-US' : 'zh-CN';
       return `
         <div class="order-card ${o.urgency==='紧急'?'urgent':''}" data-order-id="${o.id}">
@@ -2986,13 +3001,29 @@ const T = {
   if(invAddBtn){
     invAddBtn.addEventListener('click', async () => {
       const name = $('inv-name').value.trim();
+      const spec = $('inv-spec').value.trim();
+      const location = $('inv-location').value.trim();
       if(!name){ showToast(t('请填写备件名称'), true); return; }
       invAddBtn.disabled = true;
+      invAddBtn.textContent = t('翻译并新增中…');
+
+      // Best-effort auto-translation to English — never blocks the add itself.
+      let name_en = null, spec_en = null, location_en = null;
+      try{
+        const translations = await callTranslateFields({ name, spec, location });
+        name_en = translations.name || null;
+        spec_en = translations.spec || null;
+        location_en = translations.location || null;
+      }catch(e){
+        console.warn('自动翻译失败，备件仍会正常新增，只是没有英文名称', e);
+      }
+
       try{
         await addInventoryItemRow({
-          name, spec: $('inv-spec').value.trim(), category: $('inv-category').value,
+          name, spec, category: $('inv-category').value,
           unit: $('inv-unit').value.trim() || '个', quantity: parseFloat($('inv-qty').value) || 0,
-          min_stock: parseFloat($('inv-min').value) || 0, location: $('inv-location').value.trim()
+          min_stock: parseFloat($('inv-min').value) || 0, location,
+          name_en, spec_en, location_en
         });
         showToast(t('已新增备件'));
         ['inv-name','inv-spec','inv-location'].forEach(id=>$(id).value='');
@@ -3000,6 +3031,7 @@ const T = {
         await refreshAll();
       }catch(e){ showToast(t('新增失败：') + (e.message||''), true); }
       invAddBtn.disabled = false;
+      invAddBtn.textContent = t('新增备件');
     });
   }
 
@@ -3041,11 +3073,14 @@ const T = {
     wrap.innerHTML = rows.map(i => {
       const low = i.min_stock > 0 && i.quantity <= i.min_stock;
       const inactive = i.active === false;
+      const displayName = (currentLang === 'en' && i.name_en) ? i.name_en : i.name;
+      const displaySpec = (currentLang === 'en' && i.spec_en) ? i.spec_en : i.spec;
+      const displayLocation = (currentLang === 'en' && i.location_en) ? i.location_en : i.location;
       return `
         <div class="inv-row ${low?'low':''}" style="${inactive?'opacity:0.55;':''}">
           <div>
-            <div class="inv-name">${escapeHtml(i.name)} ${i.spec?`<span class="inv-meta">(${escapeHtml(i.spec)})</span>`:''} ${inactive?`<span class="tag warn">${t('已下架')}</span>`:''}</div>
-            <div class="inv-meta">${t(i.category||'')} · ${i.location ? escapeHtml(i.location) : t('未标注位置')}</div>
+            <div class="inv-name">${escapeHtml(displayName)} ${displaySpec?`<span class="inv-meta">(${escapeHtml(displaySpec)})</span>`:''} ${inactive?`<span class="tag warn">${t('已下架')}</span>`:''}</div>
+            <div class="inv-meta">${t(i.category||'')} · ${displayLocation ? escapeHtml(displayLocation) : t('未标注位置')}</div>
           </div>
           <div style="display:flex; align-items:center; gap:14px;">
             <div class="inv-qty ${low?'low':''}">${i.quantity}${escapeHtml(i.unit||'')}${low?' ⚠'+t('低库存'):''}</div>
